@@ -31,7 +31,8 @@ public class CoreConfigContextBuilder
     ///     Builds a <see cref="CoreConfigContext" /> for the given node, resolves its proxy map,
     ///     and processes outbound nodes referenced by routing rules.
     /// </summary>
-    public static async Task<CoreConfigContextBuilderResult> Build(Config config, ProfileItem node)
+    public static async Task<CoreConfigContextBuilderResult> Build(Config config, ProfileItem node,
+        RoutingItem? routing = null, string? tunInterfaceName = null)
     {
         var runCoreType = AppManager.Instance.GetCoreType(node, node.ConfigType);
         var coreType = runCoreType == ECoreType.sing_box ? ECoreType.sing_box : ECoreType.Xray;
@@ -43,10 +44,11 @@ public class CoreConfigContextBuilder
             AppConfig = config,
             FullConfigTemplate = await AppManager.Instance.GetFullConfigTemplateItem(coreType),
             IsTunEnabled = config.TunModeItem.EnableTun,
+            TunInterfaceName = tunInterfaceName,
             SimpleDnsItem = config.SimpleDNSItem,
             ProtectDomainList = [],
             RawDnsItem = await AppManager.Instance.GetDNSItem(coreType),
-            RoutingItem = await ConfigHandler.GetDefaultRouting(config),
+            RoutingItem = routing ?? await ConfigHandler.GetDefaultRouting(config),
             IsWindows = Utils.IsWindows(),
             IsMacOS = Utils.IsMacOS(),
             IsLinux = Utils.IsLinux(),
@@ -143,9 +145,10 @@ public class CoreConfigContextBuilder
     ///     the main build succeeds, also builds the optional pre-socks context required for TUN
     ///     protection or pre-socks proxy chaining.
     /// </summary>
-    public static async Task<CoreConfigContextBuilderAllResult> BuildAll(Config config, ProfileItem node)
+    public static async Task<CoreConfigContextBuilderAllResult> BuildAll(Config config, ProfileItem node,
+        RoutingItem? routing = null, string? tunInterfaceName = null)
     {
-        var mainResult = await Build(config, node);
+        var mainResult = await Build(config, node, routing, tunInterfaceName);
         if (!mainResult.Success)
         {
             return new CoreConfigContextBuilderAllResult(mainResult, null);
@@ -196,7 +199,8 @@ public class CoreConfigContextBuilder
         var preSocksItem = ConfigHandler.GetPreSocksItem(config, node, coreType);
         if (preSocksItem != null)
         {
-            var preSocksResult = await Build(nodeContext.AppConfig, preSocksItem);
+            var preSocksResult = await Build(nodeContext.AppConfig, preSocksItem, nodeContext.RoutingItem,
+                nodeContext.TunInterfaceName);
 
             var protectCoreTypeList = new HashSet<ECoreType>(nodeContext.ProtectCoreTypeList) { nodeContext.RunCoreType };
 

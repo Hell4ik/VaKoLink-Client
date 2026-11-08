@@ -1,3 +1,4 @@
+using System.Windows.Media.Imaging;
 using v2rayN.Manager;
 
 namespace v2rayN.Views;
@@ -5,11 +6,19 @@ namespace v2rayN.Views;
 public partial class StatusBarView
 {
     private static Config _config;
+    private string? _vaKoLinkTrayIcon;
 
     public StatusBarView()
     {
         InitializeComponent();
         _config = AppManager.Instance.Config;
+        if (AppManager.Instance.ConnectionModes is not null)
+        {
+            statusDetails.Visibility = Visibility.Collapsed;
+            spEnableTun.Visibility = cmbSystemProxy.Visibility = Visibility.Collapsed;
+            menuSystemProxyClear.Visibility = menuSystemProxySet.Visibility =
+                menuSystemProxyNothing.Visibility = menuSystemProxyPac.Visibility = Visibility.Collapsed;
+        }
 
         menuExit.Click += menuExit_Click;
         txtRunningServerDisplay.PreviewMouseDown += txtRunningInfoDisplay_MouseDoubleClick;
@@ -17,6 +26,10 @@ public partial class StatusBarView
 
         this.WhenActivated(disposables =>
         {
+            AppEvents.AppExitRequested.AsObservable()
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
+                .Subscribe(_ => tbNotify.Dispose()).DisposeWith(disposables);
+
             //system proxy
             this.OneWayBind(ViewModel, vm => vm.BlSystemProxyClear, v => v.menuSystemProxyClear2.Visibility, conversionHint: BooleanToVisibilityHint.UseHidden, viewModelToViewConverterOverride: new BooleanToVisibilityTypeConverter()).DisposeWith(disposables);
             this.OneWayBind(ViewModel, vm => vm.BlSystemProxySet, v => v.menuSystemProxySet2.Visibility, conversionHint: BooleanToVisibilityHint.UseHidden, viewModelToViewConverterOverride: new BooleanToVisibilityTypeConverter()).DisposeWith(disposables);
@@ -45,7 +58,10 @@ public partial class StatusBarView
 
             this.BindCommand(ViewModel, vm => vm.CopyProxyCmdToClipboardCmd, v => v.menuCopyProxyCmdToClipboard).DisposeWith(disposables);
 
-            this.OneWayBind(ViewModel, vm => vm.RunningServerToolTipText, v => v.tbNotify.ToolTipText).DisposeWith(disposables);
+            if (AppManager.Instance.ConnectionModes is null)
+            {
+                this.OneWayBind(ViewModel, vm => vm.RunningServerToolTipText, v => v.tbNotify.ToolTipText).DisposeWith(disposables);
+            }
             this.OneWayBind(ViewModel, vm => vm.NotifyLeftClickCmd, v => v.tbNotify.LeftClickCommand).DisposeWith(disposables);
 
             //status bar
@@ -76,18 +92,47 @@ public partial class StatusBarView
             }).DisposeWith(disposables);
         });
 
-        _ = RefreshIcon();
+        if (AppManager.Instance.ConnectionModes is null)
+        {
+            _ = RefreshIcon();
+        }
+        else
+        {
+            SetVaKoLinkTrayState(connected: false, useTun: false, transportRunning: false);
+        }
     }
 
     private async Task RefreshIcon()
     {
+        if (AppManager.Instance.ConnectionModes is not null)
+        {
+            return;
+        }
         tbNotify.Icon = await WindowsManager.Instance.GetNotifyIcon(_config);
         Application.Current.MainWindow?.Icon = WindowsManager.Instance.GetAppIcon(_config);
     }
 
+    internal void SetVaKoLinkTrayState(bool connected, bool useTun, bool transportRunning)
+    {
+        var (icon, status) = (connected, useTun, transportRunning) switch
+        {
+            (_, _, true) => ("NotifyIcon3.ico", "Proxy + Transport"),
+            (true, true, _) => ("NotifyIcon2.ico", "TUN подключён"),
+            (true, false, _) => ("VaKoLinkProxy.ico", "Proxy подключён"),
+            _ => ("NotifyIcon1.ico", "Отключено")
+        };
+        if (_vaKoLinkTrayIcon == icon)
+        {
+            return;
+        }
+
+        tbNotify.IconSource = BitmapFrame.Create(new Uri($"pack://application:,,,/v2rayN;component/Resources/{icon}"));
+        tbNotify.ToolTipText = $"VaKoLink — {status}";
+        _vaKoLinkTrayIcon = icon;
+    }
+
     private async void menuExit_Click(object sender, RoutedEventArgs e)
     {
-        tbNotify.Dispose();
         await AppManager.Instance.AppExitAsync(true);
     }
 

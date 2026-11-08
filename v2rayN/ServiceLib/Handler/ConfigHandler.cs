@@ -164,7 +164,7 @@ public static class ConfigHandler
         config.ClashUIItem.ConnectionsColumnItem ??= [];
         config.SystemProxyItem ??= new();
         config.WebDavItem ??= new();
-        config.CheckUpdateItem ??= new();
+        config.CheckUpdateItem ??= new() { UpdateViaProxy = !AppManager.Instance.UseVaKoLinkProfile };
         config.Fragment4RayItem ??= new()
         {
             Packets = "tlshello",
@@ -2520,13 +2520,16 @@ public static class ConfigHandler
     /// </summary>
     /// <param name="config">Current configuration</param>
     /// <returns>The default routing item</returns>
-    public static async Task<RoutingItem> GetDefaultRouting(Config config)
+    public static async Task<RoutingItem?> GetDefaultRouting(Config config)
     {
         var item = await SQLiteHelper.Instance.TableAsync<RoutingItem>().FirstOrDefaultAsync(it => it.IsActive == true);
         if (item is null)
         {
             var item2 = await SQLiteHelper.Instance.TableAsync<RoutingItem>().FirstOrDefaultAsync();
-            await SetDefaultRouting(config, item2);
+            if (item2 is not null)
+            {
+                await SetDefaultRouting(config, item2);
+            }
             return item2;
         }
 

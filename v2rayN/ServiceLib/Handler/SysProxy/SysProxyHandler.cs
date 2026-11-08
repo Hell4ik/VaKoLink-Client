@@ -83,7 +83,7 @@ public static class SysProxyHandler
         return string.Join(',', items);
     }
 
-    private static (string strProxy, string strExceptions) GetWindowsProxyString(Config config, int port)
+    internal static (string strProxy, string strExceptions) GetWindowsProxyString(Config config, int port)
     {
         var strExceptions = config.SystemProxyItem.SystemProxyExceptions.Replace(" ", "");
         if (config.SystemProxyItem.NotProxyLocalAddress)

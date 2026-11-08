@@ -11,6 +11,7 @@
 		<SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<CETCompat>false</CETCompat>
+		<VaKoLinkRevision>12</VaKoLinkRevision>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -32,11 +33,28 @@
 		<Resource Include="Resources\NotifyIcon2.ico" />
 		<Resource Include="Resources\NotifyIcon3.ico" />
 		<Resource Include="Resources\NotifyIcon4.ico" />
+		<Resource Include="Resources\VaKoLinkProxy.ico" />
 		<Resource Include="Resources\v2rayN.ico" />
+		<AssemblyMetadata Include="VaKoLinkRevision" Value="$(VaKoLinkRevision)" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\ServiceLib\ServiceLib.csproj" />
+	</ItemGroup>
+
+	<PropertyGroup Condition="'$(VaKoLinkTransportSourceRoot)' != ''">
+		<DefineConstants>$(DefineConstants);VAKOLINK_TRANSPORT</DefineConstants>
+	</PropertyGroup>
+
+	<ItemGroup Condition="'$(VaKoLinkTransportSourceRoot)' != ''">
+		<ProjectReference Include="$(VaKoLinkTransportSourceRoot)\src\VakoLink.AntiDpi.Windows\VakoLink.AntiDpi.Windows.csproj" />
+		<Compile Include="$(VaKoLinkTransportSourceRoot)\src\VakoLink.AionTransport.Proxy\UserTransportRuntime.cs" Link="Transport\UserTransportRuntime.cs" />
+		<Compile Include="$(VaKoLinkTransportSourceRoot)\src\VakoLink.AionTransport.Proxy\GameInstall.cs" Link="Transport\GameInstall.cs" />
+		<Content Include="$(VaKoLinkTransportSourceRoot)\tools\Discover-LocalProxy.ps1;$(VaKoLinkTransportSourceRoot)\tools\ProxyNetworkState.ps1"
+		         Link="tools\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest"
+		         CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+		<Content Include="$(VaKoLinkTransportCore)" Link="core\sing-box.exe" CopyToOutputDirectory="PreserveNewest"
+		         CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
 	</ItemGroup>
 
 </Project>

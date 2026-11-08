@@ -62,10 +62,11 @@ public class CoreManager
 
     /// <param name="mainContext">Resolved main context (with pre-socks ports already merged if applicable).</param>
     /// <param name="preContext">Optional pre-socks context passed to <see cref="CoreStartPreService"/>.</param>
-    public async Task LoadCore(CoreConfigContext? mainContext, CoreConfigContext? preContext)
+    public async Task LoadCore(CoreConfigContext? mainContext, CoreConfigContext? preContext, bool checkedLaunch = false)
     {
         if (mainContext == null)
         {
+            if (checkedLaunch) throw new InvalidOperationException(ResUI.CheckServerSettings);
             await UpdateFunc(false, ResUI.CheckServerSettings);
             return;
         }
@@ -75,6 +76,7 @@ public class CoreManager
         var result = await CoreConfigHandler.GenerateClientConfig(mainContext, fileName);
         if (result.Success != true)
         {
+            if (checkedLaunch) throw new InvalidOperationException(result.Msg);
             await UpdateFunc(true, result.Msg);
             return;
         }
@@ -82,18 +84,18 @@ public class CoreManager
         await UpdateFunc(false, $"{node.GetSummary()}");
         await UpdateFunc(false, $"{Utils.GetRuntimeInfo()}");
         await UpdateFunc(false, string.Format(ResUI.StartService, DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")));
-        await CoreStop();
+        await CoreStop(checkedLaunch);
         await Task.Delay(100);
 
-        if (Utils.IsWindows() && (mainContext?.IsTunEnabled == true || preContext?.IsTunEnabled == true))
+        if (!checkedLaunch && Utils.IsWindows() && (mainContext.IsTunEnabled || preContext?.IsTunEnabled == true))
         {
             await Task.Delay(100);
             await WindowsUtils.RemoveTunDevice();
         }
 
-        await CoreStart(mainContext);
+        await CoreStart(mainContext, checkedLaunch);
         await WaitForProxyPort(preContext);
-        await CoreStartPreService(preContext);
+        await CoreStartPreService(preContext, checkedLaunch);
 
         AppManager.Instance.RunningCoreType = preContext?.RunCoreType ?? mainContext.RunCoreType;
 
@@ -102,6 +104,12 @@ public class CoreManager
             await UpdateFunc(true, $"{node.GetSummary()}");
         }
     }
+
+    public bool IsConnectionRunning(bool requiresPreCore)
+        => _processService is { HasExited: false } && (!requiresPreCore || _processPreService is { HasExited: false });
+
+    public string ConnectionExitReason()
+        => _processPreService?.ExitReason ?? _processService?.ExitReason ?? ResUI.FailedToRunCore;
 
     public async Task<ProcessService?> LoadCoreConfigSpeedtest(List<ServerTestItem> selecteds)
     {
@@ -144,7 +152,7 @@ public class CoreManager
         return await RunProcess(coreInfo, fileName, true, false);
     }
 
-    public async Task CoreStop()
+    public async Task CoreStop(bool checkExit = false)
     {
         try
         {
@@ -154,36 +162,41 @@ public class CoreManager
                 _linuxSudo = false;
             }
 
+            if (_processPreService != null)
+            {
+                await _processPreService.StopAsync();
+                if (checkExit && !_processPreService.HasExited) throw new InvalidOperationException("Ядро TUN не завершилось.");
+                _processPreService.Dispose();
+                _processPreService = null;
+            }
+
             if (_processService != null)
             {
                 await _processService.StopAsync();
+                if (checkExit && !_processService.HasExited) throw new InvalidOperationException("Ядро прокси не завершилось.");
                 _processService.Dispose();
                 _processService = null;
             }
 
-            if (_processPreService != null)
-            {
-                await _processPreService.StopAsync();
-                _processPreService.Dispose();
-                _processPreService = null;
-            }
+            AppManager.Instance.RunningCoreType = default;
         }
         catch (Exception ex)
         {
             Logging.SaveLog(_tag, ex);
+            if (checkExit) throw;
         }
     }
 
     #region Private
 
-    private async Task CoreStart(CoreConfigContext context)
+    private async Task CoreStart(CoreConfigContext context, bool checkedLaunch)
     {
         var node = context.Node;
         var coreType = AppManager.Instance.GetCoreType(node, node.ConfigType);
         var coreInfo = CoreInfoManager.Instance.GetCoreInfo(coreType);
 
         var displayLog = node.ConfigType != EConfigType.Custom || node.DisplayLog;
-        var proc = await RunProcess(coreInfo, Global.CoreConfigFileName, displayLog, true, context.IsTunEnabled);
+        var proc = await RunProcess(coreInfo, Global.CoreConfigFileName, displayLog, true, context.IsTunEnabled, checkedLaunch);
         if (proc is null)
         {
             return;
@@ -191,7 +204,7 @@ public class CoreManager
         _processService = proc;
     }
 
-    private async Task CoreStartPreService(CoreConfigContext? preContext)
+    private async Task CoreStartPreService(CoreConfigContext? preContext, bool checkedLaunch)
     {
         if (_processService is { HasExited: false } && preContext != null)
         {
@@ -201,12 +214,16 @@ public class CoreManager
             if (result.Success)
             {
                 var coreInfo = CoreInfoManager.Instance.GetCoreInfo(preCoreType);
-                var proc = await RunProcess(coreInfo, Global.CorePreConfigFileName, true, true, preContext.IsTunEnabled);
+                var proc = await RunProcess(coreInfo, Global.CorePreConfigFileName, true, true, preContext.IsTunEnabled, checkedLaunch);
                 if (proc is null)
                 {
                     return;
                 }
                 _processPreService = proc;
+            }
+            else if (checkedLaunch)
+            {
+                throw new InvalidOperationException(result.Msg);
             }
         }
     }
@@ -302,11 +319,13 @@ public class CoreManager
             && isNonWindows;
     }
 
-    private async Task<ProcessService?> RunProcess(CoreInfo? coreInfo, string configPath, bool displayLog, bool mayNeedSudo, bool isTunLaunch = false)
+    private async Task<ProcessService?> RunProcess(CoreInfo? coreInfo, string configPath, bool displayLog, bool mayNeedSudo,
+        bool isTunLaunch = false, bool checkedLaunch = false)
     {
         var fileName = CoreInfoManager.Instance.GetCoreExecFile(coreInfo, out var msg);
         if (fileName.IsNullOrEmpty())
         {
+            if (checkedLaunch) throw new InvalidOperationException(msg);
             await UpdateFunc(false, msg);
             return null;
         }
@@ -326,6 +345,7 @@ public class CoreManager
         catch (Exception ex)
         {
             Logging.SaveLog(_tag, ex);
+            if (checkedLaunch) throw;
             await UpdateFunc(mayNeedSudo, ex.Message);
             return null;
         }
@@ -349,17 +369,22 @@ public class CoreManager
             updateFunc: _updateFunc
         );
 
-        await procService.StartAsync();
-
-        await Task.Delay(100);
-
-        if (procService is null or { HasExited: true })
+        try
         {
-            throw new Exception(ResUI.FailedToRunCore);
+            await procService.StartAsync();
+            await Task.Delay(100);
+            if (procService.HasExited)
+            {
+                throw new InvalidOperationException(procService.ExitReason ?? ResUI.FailedToRunCore);
+            }
+            AddProcessJob(procService.Handle);
+            return procService;
         }
-        AddProcessJob(procService.Handle);
-
-        return procService;
+        catch
+        {
+            procService.Dispose();
+            throw;
+        }
     }
 
     private void AddProcessJob(nint processHandle)

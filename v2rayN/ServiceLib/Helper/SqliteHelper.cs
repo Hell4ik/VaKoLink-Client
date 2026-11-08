@@ -33,6 +33,11 @@ public sealed class SQLiteHelper
         return await _dbAsync.InsertAsync(model);
     }
 
+    public Task<int> InsertIfMissingAsync(object model)
+    {
+        return _dbAsync.InsertAsync(model, "OR IGNORE");
+    }
+
     public async Task<int> ReplaceAsync(object model)
     {
         return await _dbAsync.InsertOrReplaceAsync(model);

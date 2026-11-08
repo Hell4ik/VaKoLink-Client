@@ -75,7 +75,10 @@ public partial class RoutingSettingViewModel : MyReactiveObject
         DomainStrategy = _config.RoutingBasicItem.DomainStrategy;
         DomainStrategy4Singbox = _config.RoutingBasicItem.DomainStrategy4Singbox;
 
-        await ConfigHandler.InitBuiltinRouting(_config);
+        if (AppManager.Instance.ConnectionModes is null)
+        {
+            await ConfigHandler.InitBuiltinRouting(_config);
+        }
         await RefreshRoutingItems();
     }
 

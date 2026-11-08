@@ -1,4 +1,5 @@
 using v2rayN.Manager;
+using v2rayN.ViewModels;
 using v2rayN.Views;
 
 namespace v2rayN;
@@ -34,6 +35,7 @@ public partial class App
             return;
         }
 
+        AppManager.Instance.UseVaKoLinkProfile = true;
         if (!AppManager.Instance.InitApp())
         {
             UI.Show($"Loading GUI configuration file is abnormal,please restart the application{Environment.NewLine}加载GUI配置文件异常,请重启应用");
@@ -42,6 +44,7 @@ public partial class App
         }
 
         AppManager.Instance.WindowDialog = new WindowDialog();
+        AppManager.Instance.ConnectionModes = new(AppManager.Instance.Config);
 
         AppManager.Instance.InitComponents();
 
@@ -51,13 +54,16 @@ public partial class App
 
         base.OnStartup(e);
 
+        var themeSettings = new ThemeSettingViewModel();
         var mainWindowViewModel = new MainWindowViewModel();
         var viewFor = SimpleViewLocator.Instance.ResolveView(mainWindowViewModel);
         viewFor!.ViewModel = mainWindowViewModel;
 
         var mainWindow = (MainWindow)viewFor;
-        mainWindow.Show();
+        mainWindow.ThemeSettings = themeSettings;
         MainWindow = mainWindow;
+        WindowsUtils.SetDarkBorder(mainWindow, AppManager.Instance.Config.UiItem.CurrentTheme);
+        mainWindow.Show();
     }
 
     private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

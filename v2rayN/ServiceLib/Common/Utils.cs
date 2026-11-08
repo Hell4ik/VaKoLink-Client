@@ -1178,7 +1178,8 @@ public class Utils
     {
         if (Environment.GetEnvironmentVariable(Global.LocalAppData) == "1")
         {
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "v2rayN");
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                AppManager.Instance.UseVaKoLinkProfile ? "VaKoLink" : "v2rayN");
         }
 
         return GetBaseDirectory();

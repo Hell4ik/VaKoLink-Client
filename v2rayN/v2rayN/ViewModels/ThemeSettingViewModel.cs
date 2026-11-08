@@ -24,7 +24,7 @@ public partial class ThemeSettingViewModel : MyReactiveObject
     {
         _config = AppManager.Instance.Config;
 
-        RegisterSystemColorSet(_config, ModifyTheme);
+        RegisterSystemColorSet(_config, () => Application.Current.Dispatcher.InvokeAsync(ModifyTheme));
 
         BindingUI();
         RestoreUI();
@@ -125,7 +125,10 @@ public partial class ThemeSettingViewModel : MyReactiveObject
         theme.SetBaseTheme(baseTheme);
         _paletteHelper.SetTheme(theme);
 
-        WindowsUtils.SetDarkBorder(Application.Current.MainWindow, CurrentTheme);
+        if (Application.Current.MainWindow is { } window)
+        {
+            WindowsUtils.SetDarkBorder(window, CurrentTheme);
+        }
     }
 
     private void ModifyFontSize()

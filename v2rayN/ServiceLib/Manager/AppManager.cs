@@ -11,6 +11,8 @@ public sealed class AppManager
     public static AppManager Instance => _instance.Value;
     public Config Config => _config;
     public IWindowDialog WindowDialog { get; set; } = null!;
+    public VaKoLinkConnection? ConnectionModes { get; set; }
+    public bool UseVaKoLinkProfile { get; set; }
 
     public int StatePort
     {
@@ -121,11 +123,18 @@ public sealed class AppManager
 
     public async Task AppExitAsync(bool needShutdown)
     {
+        if (OperatingSystem.IsWindows() && ConnectionModes is { } connection && !await connection.ShutdownAsync())
+        {
+            return;
+        }
         try
         {
             Logging.SaveLog("AppExitAsync Begin");
 
-            await SysProxyHandler.UpdateSysProxy(_config, true);
+            if (ConnectionModes is null)
+            {
+                await SysProxyHandler.UpdateSysProxy(_config, true);
+            }
             AppEvents.AppExitRequested.Publish();
             await Task.Delay(50); //Wait for AppExitRequested to be processed
 

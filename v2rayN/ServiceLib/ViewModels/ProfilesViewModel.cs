@@ -566,7 +566,7 @@ public partial class ProfilesViewModel : MyReactiveObject
         await SetDefaultServer(SelectedProfile.IndexId);
     }
 
-    public async Task SetDefaultServer(string? indexId)
+    public async Task SetDefaultServer(string? indexId, bool reload = true)
     {
         if (indexId.IsNullOrEmpty())
         {
@@ -586,7 +586,10 @@ public partial class ProfilesViewModel : MyReactiveObject
         if (await ConfigHandler.SetDefaultServerIndex(_config, indexId) == 0)
         {
             await RefreshServers();
-            Reload();
+            if (reload)
+            {
+                Reload();
+            }
         }
     }
 

@@ -83,6 +83,7 @@ public partial class MainWindowViewModel : MyReactiveObject
     [Reactive] public partial bool BlNewUpdate { get; set; }
 
     [Reactive] public partial EGirdOrientation MainGirdOrientation { get; set; }
+    [Reactive] public partial bool HasConnectionServers { get; set; }
 
     #endregion Menu
 
@@ -344,7 +345,14 @@ public partial class MainWindowViewModel : MyReactiveObject
         }
         await RefreshServersDispatcherAsync();
 
-        await Reload();
+        if (OperatingSystem.IsWindows() && AppManager.Instance.ConnectionModes is { } connection)
+        {
+            await connection.MarkReadyAsync();
+        }
+        else
+        {
+            await Reload();
+        }
     }
 
     #endregion Init
@@ -411,6 +419,10 @@ public partial class MainWindowViewModel : MyReactiveObject
     {
         await ProfilesViewModel.RefreshServersBiz();
         await StatusBarViewModel.RefreshServersBiz();
+        if (AppManager.Instance.ConnectionModes is not null)
+        {
+            HasConnectionServers = (await AppManager.Instance.ProfileModels(string.Empty, string.Empty)) is { Count: > 0 };
+        }
 
         // await Task.Delay(200);
     }
@@ -668,6 +680,12 @@ public partial class MainWindowViewModel : MyReactiveObject
 
     public async Task Reload()
     {
+        if (OperatingSystem.IsWindows() && AppManager.Instance.ConnectionModes is { } connection)
+        {
+            await connection.ReloadAsync();
+            return;
+        }
+
         //If there are unfinished reload job, marked with next job.
         if (!await _reloadSemaphore.WaitAsync(0))
         {

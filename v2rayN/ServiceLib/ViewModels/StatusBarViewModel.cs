@@ -112,7 +112,7 @@ public partial class StatusBarViewModel : MyReactiveObject
         BlSystemProxyPacVisible = Utils.IsWindows();
         BlIsNonWindows = Utils.IsNonWindows();
 
-        if (_config.TunModeItem.EnableTun && AllowEnableTun())
+        if (AppManager.Instance.ConnectionModes is null && _config.TunModeItem.EnableTun && AllowEnableTun())
         {
             EnableTun = true;
         }
@@ -216,13 +216,16 @@ public partial class StatusBarViewModel : MyReactiveObject
 
     private async Task Init()
     {
-        await ConfigHandler.InitBuiltinRouting(_config);
-        await RefreshRoutingsMenu();
+        if (AppManager.Instance.ConnectionModes is null)
+        {
+            await ConfigHandler.InitBuiltinRouting(_config);
+            await RefreshRoutingsMenu();
+        }
         await InboundDisplayStatus();
         // The view refreshes its icon on initialization; interaction handlers are not registered yet.
         await ChangeSystemProxyAsync(_config.SystemProxyItem.SysProxyType, false);
 
-        BlRouting = true;
+        BlRouting = AppManager.Instance.ConnectionModes is null;
     }
 
     private async Task CopyProxyCmdToClipboard()
@@ -362,7 +365,7 @@ public partial class StatusBarViewModel : MyReactiveObject
 
     private async Task SetListenerType(ESysProxyType type)
     {
-        if (_config.SystemProxyItem.SysProxyType == type)
+        if (AppManager.Instance.ConnectionModes is not null || _config.SystemProxyItem.SysProxyType == type)
         {
             return;
         }
@@ -376,6 +379,10 @@ public partial class StatusBarViewModel : MyReactiveObject
 
     public async Task ChangeSystemProxyAsync(ESysProxyType type, bool blChange)
     {
+        if (AppManager.Instance.ConnectionModes is not null)
+        {
+            return;
+        }
         await SysProxyHandler.UpdateSysProxy(_config, false);
 
         BlSystemProxyClear = type == ESysProxyType.ForcedClear;
@@ -430,7 +437,7 @@ public partial class StatusBarViewModel : MyReactiveObject
 
     private async Task DoEnableTun()
     {
-        if (_config.TunModeItem.EnableTun == EnableTun)
+        if (AppManager.Instance.ConnectionModes is not null || _config.TunModeItem.EnableTun == EnableTun)
         {
             return;
         }

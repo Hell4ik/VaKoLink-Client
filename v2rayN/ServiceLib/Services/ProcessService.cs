@@ -5,10 +5,12 @@ public class ProcessService : IDisposable
     private readonly Process _process;
     private readonly Func<bool, string, Task>? _updateFunc;
     private bool _isDisposed;
+    private string? _lastError;
 
     public int Id => _process.Id;
     public IntPtr Handle => _process.Handle;
     public bool HasExited => _process.HasExited;
+    public string? ExitReason => HasExited ? _lastError ?? $"Код завершения ядра: {_process.ExitCode}" : null;
 
     public ProcessService(
         string fileName,
@@ -127,14 +129,20 @@ public class ProcessService : IDisposable
         }
 
         _process.OutputDataReceived += dataHandler;
-        _process.ErrorDataReceived += dataHandler;
+        void errorHandler(object sender, DataReceivedEventArgs e)
+        {
+            if (e.Data.IsNotEmpty()) _lastError = e.Data;
+            dataHandler(sender, e);
+        }
+
+        _process.ErrorDataReceived += errorHandler;
 
         _process.Exited += (s, e) =>
         {
             try
             {
                 _process.OutputDataReceived -= dataHandler;
-                _process.ErrorDataReceived -= dataHandler;
+                _process.ErrorDataReceived -= errorHandler;
             }
             catch
             {

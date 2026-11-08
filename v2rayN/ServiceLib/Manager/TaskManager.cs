@@ -69,7 +69,7 @@ public class TaskManager
             }
 
             //Execute once 24 hour
-            if (numOfExecuted % 1440 == 1)
+            if (numOfExecuted % 1440 == 1 && AppManager.Instance.ConnectionModes is null)
             {
                 try
                 {
@@ -119,6 +119,17 @@ public class TaskManager
     {
         if (_config.GuiItem.AutoUpdateInterval > 0 && hours > 0 && hours % _config.GuiItem.AutoUpdateInterval == 0)
         {
+            if (OperatingSystem.IsWindows() && AppManager.Instance.ConnectionModes is { } connection)
+            {
+                await connection.RunWhileDisconnectedAsync(async () =>
+                {
+                    var service = new UpdateService(_config, (_, _) => Task.CompletedTask);
+                    var result = await service.UpdateVaKoLinkGeoAsync();
+                    await _updateFunc?.Invoke(false, result);
+                });
+                return;
+            }
+
             Logging.SaveLog("Execute update geo files");
 
             await new UpdateService(_config, async (success, msg) =>

@@ -3,7 +3,7 @@ using static ServiceLib.Handler.SysProxy.ProxySettingWindows.InternetConnectionO
 namespace ServiceLib.Handler.SysProxy;
 
 [SupportedOSPlatform("windows")]
-public static class ProxySettingWindows
+public static partial class ProxySettingWindows
 {
     private const string _regPath = @"Software\Microsoft\Windows\CurrentVersion\Internet Settings";
 
@@ -191,7 +191,7 @@ public static class ProxySettingWindows
         if (returnvalue != 0)
         {
             // throw the error codes, they might be helpful
-            throw new ApplicationException($"Set Internet Proxy failed with error code: {Marshal.GetLastWin32Error()}");
+            throw new Win32Exception(returnvalue, $"Set Internet Proxy failed with error code: {returnvalue}");
         }
 
         return true;
@@ -318,7 +318,8 @@ public static class ProxySettingWindows
         INTERNET_PER_CONN_FLAGS = 1, // Sets or retrieves the connection type. The Value member will contain one or more of the values from PerConnFlags
         INTERNET_PER_CONN_PROXY_SERVER = 2, // Sets or retrieves a string containing the proxy servers.
         INTERNET_PER_CONN_PROXY_BYPASS = 3, // Sets or retrieves a string containing the URLs that do not use the proxy server.
-        INTERNET_PER_CONN_AUTOCONFIG_URL = 4//, // Sets or retrieves a string containing the URL to the automatic configuration script.
+        INTERNET_PER_CONN_AUTOCONFIG_URL = 4, // Sets or retrieves a string containing the URL to the automatic configuration script.
+        INTERNET_PER_CONN_FLAGS_UI = 10
     }
 
     //

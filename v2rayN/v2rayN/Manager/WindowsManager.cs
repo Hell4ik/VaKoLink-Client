@@ -16,8 +16,7 @@ public sealed class WindowsManager
             var index = (int)config.SystemProxyItem.SysProxyType;
 
             //Load from routing setting
-            var createdIcon = await GetNotifyIcon4Routing(config);
-            if (createdIcon != null)
+            if (AppManager.Instance.ConnectionModes is null && await GetNotifyIcon4Routing(config) is { } createdIcon)
             {
                 return createdIcon;
             }

@@ -7,10 +7,14 @@ namespace v2rayN.Views;
 /// </summary>
 public partial class ThemeSettingView
 {
-    public ThemeSettingView()
+    public ThemeSettingView() : this(new ThemeSettingViewModel())
+    {
+    }
+
+    internal ThemeSettingView(ThemeSettingViewModel viewModel)
     {
         InitializeComponent();
-        ViewModel = new ThemeSettingViewModel();
+        ViewModel = viewModel;
 
         cmbCurrentTheme.ItemsSource = Utils.GetEnumNames<ETheme>().Take(3).ToList();
         cmbCurrentFontSize.ItemsSource = Enumerable.Range(Global.MinFontSize, Global.MinFontSizeCount).ToList();
