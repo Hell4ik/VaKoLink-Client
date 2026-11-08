@@ -52,15 +52,16 @@ internal static partial class WindowsUtils
 
     public static void SetDarkBorder(Window window, string? theme)
     {
-        var isDark = theme switch
+        SetDarkBorder(window, UseDarkTheme(theme));
+    }
+
+    internal static bool UseDarkTheme(string? theme) =>
+        theme switch
         {
             nameof(ETheme.Dark) => true,
             nameof(ETheme.Light) => false,
             _ => IsDarkTheme(),
         };
-
-        SetDarkBorder(window, isDark);
-    }
 
     private static void SetDarkBorder(Window window, bool dark)
     {

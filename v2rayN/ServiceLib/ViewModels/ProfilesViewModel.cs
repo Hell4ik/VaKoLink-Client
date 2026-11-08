@@ -360,7 +360,9 @@ public partial class ProfilesViewModel : MyReactiveObject
 
     public async Task RefreshServersBiz()
     {
-        var lstModel = await GetProfileItemsEx(_config.SubIndexId, _serverFilter);
+        var lstModel = AppManager.Instance.UseVaKoLinkProfile
+            ? await GetProfileItemsEx(string.Empty, string.Empty)
+            : await GetProfileItemsEx(_config.SubIndexId, _serverFilter);
 
         ProfileItems.ReplaceRange(lstModel ?? []);
         if (lstModel?.Count > 0)
@@ -373,6 +375,10 @@ public partial class ProfilesViewModel : MyReactiveObject
             }
             selected ??= lstModel.FirstOrDefault(t => t.IndexId == _config.IndexId);
             SelectedProfile = selected ?? lstModel.First();
+        }
+        else if (AppManager.Instance.UseVaKoLinkProfile)
+        {
+            SelectedProfile = new();
         }
 
         await DispatcherRefreshServersBizInteraction.HandleSafe(RxVoid.Default);
@@ -397,7 +403,7 @@ public partial class ProfilesViewModel : MyReactiveObject
 
     private async Task<List<ProfileItemModel>?> GetProfileItemsEx(string subid, string filter)
     {
-        var lstModel = await AppManager.Instance.ProfileModels(_config.SubIndexId, filter);
+        var lstModel = await AppManager.Instance.ProfileModels(subid, filter);
 
         await ConfigHandler.SetDefaultServer(_config, lstModel);
 

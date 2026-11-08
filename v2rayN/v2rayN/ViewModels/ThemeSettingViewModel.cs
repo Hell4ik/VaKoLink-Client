@@ -124,6 +124,7 @@ public partial class ThemeSettingViewModel : MyReactiveObject
         var theme = _paletteHelper.GetTheme();
         theme.SetBaseTheme(baseTheme);
         _paletteHelper.SetTheme(theme);
+        PultTheme.Apply(WindowsUtils.UseDarkTheme(CurrentTheme));
 
         if (Application.Current.MainWindow is { } window)
         {

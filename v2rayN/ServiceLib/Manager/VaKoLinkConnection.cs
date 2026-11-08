@@ -16,8 +16,10 @@ public sealed class VaKoLinkConnection(Config config)
     public event Action? Changed;
     public bool Ready { get; private set; }
     public bool Busy { get; private set; }
+    public bool IsConnecting { get; private set; }
     public bool UseTun => config.VaKoLinkUseTun;
     public bool IsConnected => _connected;
+    public string? ConnectedNodeName { get; private set; }
     public int? ConnectedProxyPort { get; private set; }
     public CancellationToken ConnectedSessionToken { get; private set; }
     public bool IsProxyReady => _connected && !UseTun && !Busy && !_closing;
@@ -167,6 +169,7 @@ public sealed class VaKoLinkConnection(Config config)
         }
         finally
         {
+            IsConnecting = false;
             Busy = false;
             _transition.Release();
             Changed?.Invoke();
@@ -175,6 +178,9 @@ public sealed class VaKoLinkConnection(Config config)
 
     private async Task StartAsync()
     {
+        IsConnecting = true;
+        Status = "Подключение…";
+        Changed?.Invoke();
         var useTun = UseTun;
         var routing = VaKoLinkRouting.ForMode(useTun);
         Logging.SaveLog($"VaKoLink routing: {(useTun ? "TUN" : "Proxy")} -> {routing.Remarks}");
@@ -216,8 +222,6 @@ public sealed class VaKoLinkConnection(Config config)
             throw new InvalidOperationException("Полный шаблон конфигурации ядра заменяет правила VaKoLink. Отключите шаблон в расширенных настройках.");
         }
 
-        Status = "Подключение…";
-        Changed?.Invoke();
         _requiresPreCore = pre is not null;
         _ownsCore = true;
         _ownsTun = useTun;
@@ -226,7 +230,7 @@ public sealed class VaKoLinkConnection(Config config)
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
         try
         {
-            while (core.IsConnectionRunning(_requiresPreCore) && !(useTun ? IsTunReady() : HasProxyListener(port)))
+            while (core.IsConnectionRunning(_requiresPreCore) && (!HasProxyListener(port) || useTun && !IsTunReady()))
             {
                 await Task.Delay(100, timeout.Token);
             }
@@ -239,6 +243,19 @@ public sealed class VaKoLinkConnection(Config config)
         {
             throw new InvalidOperationException(core.ConnectionExitReason());
         }
+
+        // The shipped routing presets send this public HTTPS endpoint through the selected outbound.
+        var webProxy = new WebProxy($"socks5://{Global.Loopback}:{port}");
+        var responseTime = await ConnectionHandler.GetRealPingTime(webProxy, Global.SpeedPingTestUrls[0],
+            CancellationToken.None, requireSuccess: true);
+        if (responseTime < 0)
+        {
+            throw new IOException("Выбранная нода не ответила на проверочный HTTPS-запрос.");
+        }
+        if (!core.IsConnectionRunning(_requiresPreCore) || useTun && !IsTunReady())
+        {
+            throw new IOException("Подключение прервалось во время проверки связи.");
+        }
         if (!useTun)
         {
             _proxy = new();
@@ -248,7 +265,9 @@ public sealed class VaKoLinkConnection(Config config)
         ConnectedProxyPort = useTun ? null : port;
         _monitor = new();
         ConnectedSessionToken = _monitor.Token;
+        ConnectedNodeName = profile.Remarks;
         _connected = true;
+        IsConnecting = false;
         Status = "Подключено";
         _ = MonitorAsync(useTun, port, ConnectedSessionToken);
     }
@@ -263,6 +282,7 @@ public sealed class VaKoLinkConnection(Config config)
         _monitor?.Dispose();
         _monitor = null;
         _connected = false;
+        ConnectedNodeName = null;
         ConnectedProxyPort = null;
         ConnectedSessionToken = default;
         try

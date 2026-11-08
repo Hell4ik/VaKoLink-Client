@@ -2,6 +2,7 @@ using System.Net;
 using System.Reflection;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using MaterialDesignThemes.Wpf;
 using ServiceLib.Services;
 using v2rayN.Base;
@@ -18,6 +19,7 @@ public partial class MainWindow
     private bool _hasNodes;
     private bool _selectingNode;
     private bool _updatingComponents;
+    private CancellationTokenSource? _latencyCancellation;
     private CancellationTokenSource? _updateCancellation;
     private UpdateService.VaKoLinkUpdateBatch? _preparedUpdate;
 
@@ -64,6 +66,7 @@ public partial class MainWindow
             advancedPage.Visibility = Visibility.Collapsed;
             connectionPage.Visibility = Visibility.Visible;
         };
+        nodeList.SelectionChanged += (_, _) => UpdateNodeControls();
 
         this.WhenActivated(disposables =>
         {
@@ -81,9 +84,11 @@ public partial class MainWindow
             this.BindCommand(ViewModel, vm => vm.GlobalHotkeySettingCmd, v => v.menuGlobalHotkeySetting).DisposeWith(disposables);
             this.BindCommand(ViewModel, vm => vm.OpenTheFileLocationCmd, v => v.menuOpenTheFileLocation).DisposeWith(disposables);
 
-            if (profilesHost.Content is null)
+            this.OneWayBind(ViewModel, vm => vm.ProfilesViewModel.ProfileItems, v => v.nodeList.ItemsSource).DisposeWith(disposables);
+            this.Bind(ViewModel, vm => vm.ProfilesViewModel.SelectedProfile, v => v.nodeList.SelectedItem).DisposeWith(disposables);
+
+            if (logHost.Content is null)
             {
-                ViewHost.Show(profilesHost, ViewModel.ProfilesViewModel);
                 ViewHost.Show(logHost, ViewModel.MsgViewModel);
                 ViewHost.Show(contentStatusBarView, ViewModel.StatusBarViewModel);
             }
@@ -128,6 +133,7 @@ public partial class MainWindow
                 .ObserveOn(RxSchedulers.MainThreadScheduler)
                 .Subscribe(_ =>
                 {
+                    _latencyCancellation?.Cancel();
                     _updateCancellation?.Cancel();
                     _preparedUpdate?.Dispose();
                     _preparedUpdate = null;
@@ -161,8 +167,8 @@ public partial class MainWindow
         {
             var reason = Transport104.GetUnavailableReason(connection);
             transportButton.IsEnabled = !transport.Busy && (transport.NeedsStop || reason is null);
-            transportButton.Content = transport.CleanupPending ? "Завершить остановку Transport"
-                : transport.NeedsStop ? "Остановить Transport" : "Запустить Transport";
+            transportButton.Content = transport.CleanupPending ? "Завершить"
+                : transport.NeedsStop ? "Остановить" : "Запустить";
             transportStatus.Text = !transport.Busy && !transport.NeedsStop && reason is not null
                 ? reason
                 : transport.Status;
@@ -177,8 +183,14 @@ public partial class MainWindow
             modeProxy.IsChecked = !connection.UseTun;
             modeTun.IsChecked = connection.UseTun;
             modeProxy.IsEnabled = modeTun.IsEnabled = connection.Ready && !connection.Busy;
-            connectionButton.Content = connection.NeedsDisconnect ? "Отключить" : "Подключить";
+            connectionButton.Content = connection.NeedsDisconnect && !connection.IsConnecting ? "Отключить" : "Подключить";
             connectionStatus.Text = connection.Status;
+            var connected = connection.IsConnected;
+            connectionCard.SetResourceReference(Border.BackgroundProperty, connected ? "PultConnected" : "PultCard");
+            connectionCard.SetResourceReference(Border.BorderBrushProperty, connected ? "PultConnectedOutline" : "PultOutline");
+            var statusBrush = connected ? "PultGood" : connection.IsConnecting ? "PultAccent" : "PultMuted";
+            connectionIndicator.SetResourceReference(Shape.FillProperty, statusBrush);
+            connectionStatus.SetResourceReference(TextBlock.ForegroundProperty, statusBrush);
             UpdateNodeControls();
             RenderTransport();
         }
@@ -199,13 +211,71 @@ public partial class MainWindow
     private void UpdateNodeControls()
     {
         var connection = AppManager.Instance.ConnectionModes;
-        profilesHost.Visibility = _hasNodes ? Visibility.Visible : Visibility.Collapsed;
+        var selection = nodeList.SelectedItem as ProfileItemModel;
+        nodeList.Visibility = _hasNodes ? Visibility.Visible : Visibility.Collapsed;
         emptyNodes.Visibility = _hasNodes ? Visibility.Collapsed : Visibility.Visible;
-        profilesHost.IsEnabled = !_selectingNode && connection?.Busy != true;
+        nodeList.IsEnabled = !_selectingNode && connection is { Busy: false, NeedsDisconnect: false };
+        selectedNodeName.Tag = connection?.ConnectedNodeName ?? selection?.Remarks;
+        selectedNodeName.ToolTip = selectedNodeName.Tag;
+        measureLatencyButton.IsEnabled = _hasNodes && _latencyCancellation is null && connection is { Ready: true, Busy: false };
         checkUpdateButton.IsEnabled = !_selectingNode && !_updatingComponents && _preparedUpdate is null &&
             connection is { Ready: true, Busy: false };
         connectionButton.IsEnabled = !_selectingNode && connection is { Ready: true, Busy: false } &&
-            (connection.NeedsDisconnect || _hasNodes);
+            (connection.NeedsDisconnect || !string.IsNullOrEmpty(selection?.IndexId));
+    }
+
+    private async void MeasureLatencyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel?.ProfilesViewModel is not { } profiles || _latencyCancellation is not null)
+        {
+            return;
+        }
+
+        using var cancellation = new CancellationTokenSource();
+        _latencyCancellation = cancellation;
+        measureLatencyButton.Content = "Замеряем…";
+        UpdateNodeControls();
+        try
+        {
+            var nodes = await AppManager.Instance.ProfileItems(string.Empty) ?? [];
+            var pending = nodes.Where(node => node.ConfigType != EConfigType.Custom &&
+                (node.ConfigType.IsComplexType() || node.Port > 0)).Select(node => node.IndexId).ToHashSet();
+            foreach (var row in profiles.ProfileItems)
+            {
+                row.DelayVal = string.Empty;
+            }
+
+            var service = new SpeedtestService(_config, async result =>
+            {
+                if (int.TryParse(result.Delay, out _))
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        pending.Remove(result.IndexId);
+                        return profiles.SetSpeedTestResult(result);
+                    }).Task.Unwrap();
+                }
+            });
+            await service.RunLoop(ESpeedActionType.Realping, nodes, cancellation.Token);
+            if (!cancellation.IsCancellationRequested)
+            {
+                foreach (var id in pending)
+                {
+                    await profiles.SetSpeedTestResult(new() { IndexId = id, Delay = "-1" });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logging.SaveLog("Замер задержки VaKoLink", ex);
+            MainSnackbar.MessageQueue?.Enqueue("Не удалось завершить замер задержки.");
+        }
+        finally
+        {
+            _latencyCancellation = null;
+            measureLatencyButton.Content = "Задержка ↻";
+            UpdateNodeControls();
+        }
     }
 
     private async Task ToggleConnectionAsync(VaKoLinkConnection connection)

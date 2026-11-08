@@ -1,0 +1,137 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:views="clr-namespace:v2rayN.Views">
+    <views:PultNodeLabelConverter x:Key="PultNodeLabel" />
+    <views:PultDelayConverter x:Key="PultDelay" />
+
+    <Style x:Key="PultCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource PultCard}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource PultOutline}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="13" />
+    </Style>
+
+    <Style x:Key="PultButton" TargetType="Button">
+        <Setter Property="Height" Value="42" />
+        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="Background" Value="{DynamicResource PultControl}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource PultControlOutline}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="{DynamicResource PultText}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="surface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="surface" Property="Opacity" Value="0.86" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="surface" Property="BorderBrush" Value="{DynamicResource PultAccent}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="surface" Property="Opacity" Value="0.48" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="PultMode" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{DynamicResource PultText}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="surface" Background="Transparent" CornerRadius="7" BorderThickness="1">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="surface" Property="Background" Value="{DynamicResource PultSelected}" />
+                            <Setter Property="Foreground" Value="{DynamicResource PultAccent}" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="surface" Property="BorderBrush" Value="{DynamicResource PultControlOutline}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="surface" Property="BorderBrush" Value="{DynamicResource PultAccent}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="surface" Property="Opacity" Value="0.55" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="PultNodeRow" TargetType="ListBoxItem">
+        <Setter Property="Height" Value="53" />
+        <Setter Property="Margin" Value="0,0,0,5" />
+        <Setter Property="Padding" Value="7,0" />
+        <Setter Property="Foreground" Value="{DynamicResource PultText}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="surface" Background="Transparent" BorderThickness="1"
+                            CornerRadius="9" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="surface" Property="Background" Value="{DynamicResource PultControl}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="surface" Property="Background" Value="{DynamicResource PultSelected}" />
+                            <Setter TargetName="surface" Property="BorderBrush" Value="{DynamicResource PultControlOutline}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="surface" Property="BorderBrush" Value="{DynamicResource PultAccent}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <DataTemplate x:Key="PultNode">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border Width="33" Height="29" CornerRadius="6" Background="{DynamicResource PultControl}">
+                <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
+                           Text="{Binding Remarks, Converter={StaticResource PultNodeLabel}, ConverterParameter=Badge}" />
+            </Border>
+            <TextBlock Grid.Column="1" Margin="8,0,6,0" VerticalAlignment="Center" FontSize="14" TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding Remarks}" Text="{Binding Remarks, Converter={StaticResource PultNodeLabel}}" />
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="12"
+                       Text="{Binding DelayVal, Converter={StaticResource PultDelay}}">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{DynamicResource PultMuted}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding DelayVal, Converter={StaticResource PultDelay}, ConverterParameter=Band}" Value="Good">
+                                <Setter Property="Foreground" Value="{DynamicResource PultGood}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding DelayVal, Converter={StaticResource PultDelay}, ConverterParameter=Band}" Value="Medium">
+                                <Setter Property="Foreground" Value="{DynamicResource PultMedium}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding DelayVal, Converter={StaticResource PultDelay}, ConverterParameter=Band}" Value="Bad">
+                                <Setter Property="Foreground" Value="{DynamicResource PultBad}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </Grid>
+    </DataTemplate>
+</ResourceDictionary>

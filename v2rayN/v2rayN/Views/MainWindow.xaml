@@ -6,16 +6,20 @@
     xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
     xmlns:vms="clr-namespace:ServiceLib.ViewModels;assembly=ServiceLib"
     Title="VaKoLink"
-    Width="940"
-    Height="640"
+    Width="860"
+    Height="550"
     MinWidth="680"
-    MinHeight="520"
+    MinHeight="510"
     x:TypeArguments="vms:MainWindowViewModel"
     Icon="/Resources/v2rayN.ico"
     Style="{StaticResource WindowGlobal}"
     WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Resources/PultStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
         <Style x:Key="SubscriptionChoiceButton" TargetType="Button" BasedOn="{StaticResource MaterialDesignOutlinedButton}">
             <Setter Property="Margin" Value="0,0,0,8" />
             <Setter Property="Command" Value="{x:Static materialDesign:DialogHost.CloseDialogCommand}" />
@@ -39,6 +43,7 @@
                         Command="{x:Static materialDesign:DialogHost.CloseDialogCommand}" Content="Отмена" />
             </StackPanel>
         </DataTemplate>
+        </ResourceDictionary>
     </Window.Resources>
 
     <materialDesign:DialogHost
@@ -48,9 +53,9 @@
         SnackbarMessageQueue="{Binding ElementName=MainSnackbar, Path=MessageQueue}"
         Style="{StaticResource MaterialDesignEmbeddedDialogHost}">
         <Grid>
-            <DockPanel>
-                <materialDesign:ColorZone DockPanel.Dock="Top" Mode="Standard" Padding="24,12">
-                    <DockPanel LastChildFill="False">
+            <DockPanel Background="{DynamicResource PultBackground}" TextElement.Foreground="{DynamicResource PultText}">
+                <Border DockPanel.Dock="Top" Padding="19,10" Background="{DynamicResource PultHeader}" BorderBrush="{DynamicResource PultOutline}" BorderThickness="0,0,0,1">
+                    <DockPanel LastChildFill="True">
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                             <StackPanel x:Name="updateProgressPanel" Width="194" Margin="0,0,12,0"
                                         VerticalAlignment="Center" Visibility="Collapsed">
@@ -58,10 +63,10 @@
                                 <TextBlock x:Name="updateStage" Opacity="0.8" TextAlignment="Right" TextTrimming="CharacterEllipsis"
                                            ToolTip="{Binding RelativeSource={RelativeSource Self}, Path=Text}" />
                             </StackPanel>
-                            <Button x:Name="checkUpdateButton" Margin="0,0,14,0"
-                                    MinWidth="198"
-                                    Style="{StaticResource MaterialDesignOutlinedButton}" Content="Проверить обновления" />
-                            <Menu VerticalAlignment="Center" Background="Transparent">
+                            <Button x:Name="checkUpdateButton" Margin="0,0,8,0"
+                                    MinWidth="193"
+                                    Style="{StaticResource PultButton}" Content="Проверить обновления" />
+                            <Border Height="42" MinWidth="71" CornerRadius="10" Background="{DynamicResource PultControl}" BorderBrush="{DynamicResource PultControlOutline}" BorderThickness="1"><Menu VerticalAlignment="Center" HorizontalAlignment="Center" Background="Transparent">
                                 <MenuItem x:Name="mainMenu" Padding="14,8" Header="Меню" FlowDirection="RightToLeft">
                                     <MenuItem Header="Импорт" FlowDirection="LeftToRight">
                                         <MenuItem x:Name="menuAddServerViaClipboard" Header="Из буфера обмена" InputGestureText="Ctrl+V" />
@@ -92,62 +97,88 @@
                                         <MenuItem x:Name="menuAbout" Header="О программе" />
                                     </MenuItem>
                                 </MenuItem>
-                            </Menu>
+                            </Menu></Border>
                         </StackPanel>
+                        <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource PultMuted}" Text="ПОДКЛЮЧЕНИЕ" />
                     </DockPanel>
-                </materialDesign:ColorZone>
+                </Border>
 
                 <ContentControl x:Name="contentStatusBarView" DockPanel.Dock="Bottom" />
 
                 <Grid>
-                    <Grid x:Name="connectionPage" Margin="24,12,24,20">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
+                    <Grid x:Name="connectionPage" Margin="24,22,24,24">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="3*" />
+                        </Grid.ColumnDefinitions>
 
-                        <DockPanel>
-                            <TextBlock DockPanel.Dock="Top" Margin="0,0,0,8" FontSize="22" FontWeight="SemiBold" Text="Ноды" />
-                            <Grid>
-                                <ContentControl x:Name="profilesHost" Visibility="Collapsed" />
-                                <StackPanel x:Name="emptyNodes" Margin="0,12,0,0">
-                                    <TextBlock Opacity="0.8" Text="В профиле пока нет нод." />
-                                    <Button Margin="0,10,0,0" HorizontalAlignment="Left" Click="AddSubscriptionButton_Click"
-                                            Style="{StaticResource MaterialDesignOutlinedButton}" Content="Добавить подписку" />
-                                </StackPanel>
-                            </Grid>
-                        </DockPanel>
+                        <Border Padding="13,16,13,12" Style="{StaticResource PultCardStyle}">
+                            <DockPanel>
+                                <DockPanel DockPanel.Dock="Top" Margin="5,0,5,10">
+                                    <Button x:Name="measureLatencyButton" DockPanel.Dock="Right" Click="MeasureLatencyButton_Click"
+                                            Style="{StaticResource PultButton}" Content="Задержка ↻"
+                                            ToolTip="Измерить задержку всех нод" />
+                                    <TextBlock VerticalAlignment="Center" FontSize="17" FontWeight="SemiBold" Text="Ноды" />
+                                </DockPanel>
+                                <Grid>
+                                    <ListBox x:Name="nodeList" Visibility="Collapsed" Background="Transparent" BorderThickness="0"
+                                             ItemContainerStyle="{StaticResource PultNodeRow}" ItemTemplate="{StaticResource PultNode}"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                             VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                             AutomationProperties.Name="Ноды" />
+                                    <StackPanel x:Name="emptyNodes" Margin="5,10,0,0">
+                                        <TextBlock Foreground="{DynamicResource PultMuted}" Text="В профиле пока нет нод." TextWrapping="Wrap" />
+                                        <Button Margin="0,12,0,0" HorizontalAlignment="Left" Click="AddSubscriptionButton_Click"
+                                                Style="{StaticResource PultButton}" Content="Добавить подписку" />
+                                    </StackPanel>
+                                </Grid>
+                            </DockPanel>
+                        </Border>
 
-                        <materialDesign:Card Grid.Row="1" Margin="0,12,0,0" Padding="16,12">
-                            <StackPanel>
-                                <WrapPanel>
-                                    <TextBlock Margin="0,0,18,0" VerticalAlignment="Center" FontWeight="SemiBold" Text="Режим" />
-                                    <RadioButton x:Name="modeProxy" Margin="0,0,20,0" VerticalAlignment="Center"
-                                                 GroupName="VaKoLinkMode" Content="Proxy" />
-                                    <RadioButton x:Name="modeTun" Margin="0,0,24,0" VerticalAlignment="Center"
-                                                 GroupName="VaKoLinkMode" Content="TUN" />
-                                    <Button x:Name="connectionButton" MinWidth="144" Content="Подключить" />
-                                </WrapPanel>
-                                <TextBlock x:Name="connectionStatus" Margin="0,8,0,0"
-                                           AutomationProperties.LiveSetting="Polite" Text="Отключено" TextWrapping="Wrap" />
-                            </StackPanel>
-                        </materialDesign:Card>
-                        <materialDesign:Card Grid.Row="2" Margin="0,10,0,0" Padding="16,12">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Margin="0,0,14,0">
-                                    <TextBlock FontWeight="SemiBold" Text="Transport" />
-                                    <TextBlock x:Name="transportStatus" Margin="0,4,0,0" Opacity="0.8"
-                                               AutomationProperties.LiveSetting="Polite" Text="Transport остановлен" TextWrapping="Wrap" />
+                        <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel>
+                            <Border x:Name="connectionCard" Padding="19,18,19,19" Style="{StaticResource PultCardStyle}">
+                                <StackPanel>
+                                    <DockPanel Margin="0,0,0,17">
+                                        <Ellipse x:Name="connectionIndicator" DockPanel.Dock="Left" Width="8" Height="8" Margin="0,0,7,0"
+                                                 VerticalAlignment="Center" Fill="{DynamicResource PultMuted}" />
+                                        <TextBlock x:Name="connectionStatus" Foreground="{DynamicResource PultMuted}" FontSize="14"
+                                                   AutomationProperties.LiveSetting="Polite" Text="Отключено" TextWrapping="Wrap" />
+                                    </DockPanel>
+                                    <TextBlock Margin="0,0,0,17" FontSize="32" FontWeight="Bold" TextTrimming="CharacterEllipsis"
+                                               Text="{Binding Tag, RelativeSource={RelativeSource Self}, Converter={StaticResource PultNodeLabel}}"
+                                               x:Name="selectedNodeName" />
+                                    <TextBlock Margin="0,0,0,8" FontSize="14" Text="Режим" />
+                                    <Border Padding="4" Height="45" CornerRadius="10" Background="{DynamicResource PultControl}">
+                                        <UniformGrid Rows="1" Columns="2">
+                                            <RadioButton x:Name="modeProxy" Style="{StaticResource PultMode}" GroupName="VaKoLinkMode" Content="Proxy" />
+                                            <RadioButton x:Name="modeTun" Style="{StaticResource PultMode}" GroupName="VaKoLinkMode" Content="TUN" />
+                                        </UniformGrid>
+                                    </Border>
+                                    <Button x:Name="connectionButton" Margin="0,14,0,0" Height="48" FontWeight="SemiBold"
+                                            Background="#0977A9" BorderBrush="#29B8F4" Foreground="White"
+                                            Style="{StaticResource PultButton}" Content="Подключить" />
                                 </StackPanel>
-                                <Button x:Name="transportButton" Grid.Column="1" VerticalAlignment="Center" MinWidth="164"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}" Content="Запустить Transport" />
-                            </Grid>
-                        </materialDesign:Card>
+                            </Border>
+
+                            <Border Margin="0,11,0,0" Padding="15,12" Style="{StaticResource PultCardStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <TextBlock FontSize="17" FontWeight="SemiBold" Text="Transport" />
+                                        <TextBlock x:Name="transportStatus" Margin="0,3,0,0" Foreground="{DynamicResource PultMuted}"
+                                                   AutomationProperties.LiveSetting="Polite" Text="Остановлен" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <Button x:Name="transportButton" Grid.Column="1" VerticalAlignment="Center" MinWidth="98"
+                                            AutomationProperties.Name="Управление Transport" Style="{StaticResource PultButton}" Content="Запустить" />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                        </ScrollViewer>
                     </Grid>
 
                     <DockPanel x:Name="advancedPage" Margin="24,18,24,16" Visibility="Collapsed">
