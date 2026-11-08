@@ -26,7 +26,7 @@
         </Style>
         <DataTemplate x:Key="SubscriptionImportChoices">
             <StackPanel Width="300" Margin="24">
-                <TextBlock Margin="0,0,0,16" FontSize="20" FontWeight="SemiBold" Text="Добавить Конфигурацию" />
+                <TextBlock Margin="0,0,0,16" FontSize="20" FontWeight="SemiBold" Text="Добавить конфигурацию" />
                 <Button Style="{StaticResource SubscriptionChoiceButton}" Content="Из буфера обмена" CommandParameter="Clipboard" />
                 <Button Style="{StaticResource SubscriptionChoiceButton}" Content="QR-код" CommandParameter="Qr" />
                 <Button Style="{StaticResource SubscriptionChoiceButton}" Content="Вручную" CommandParameter="Manual" />
@@ -130,7 +130,7 @@
                                     <StackPanel x:Name="emptyNodes" Margin="5,10,0,0">
                                         <TextBlock Foreground="{DynamicResource PultMuted}" Text="В профиле пока нет нод." TextWrapping="Wrap" />
                                         <Button Margin="0,12,0,0" HorizontalAlignment="Left" Click="AddConfigurationButton_Click"
-                                                Style="{StaticResource PultButton}" Content="Добавить Конфигурацию" />
+                                                Style="{StaticResource PultButton}" Content="Добавить конфигурацию" />
                                     </StackPanel>
                                 </Grid>
                             </DockPanel>
