@@ -305,7 +305,7 @@ public partial class MainWindow
         await connection.ToggleAsync();
     }
 
-    private async void AddSubscriptionButton_Click(object sender, RoutedEventArgs e)
+    private async void AddConfigurationButton_Click(object sender, RoutedEventArgs e)
     {
         if (ViewModel is not { } viewModel)
         {
