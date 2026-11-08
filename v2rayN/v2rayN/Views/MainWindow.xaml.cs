@@ -75,6 +75,11 @@ public partial class MainWindow
             this.BindCommand(ViewModel, vm => vm.AddServerViaImageCmd, v => v.menuAddServerViaImage).DisposeWith(disposables);
             this.BindCommand(ViewModel, vm => vm.SubSettingCmd, v => v.menuSubSetting).DisposeWith(disposables);
             this.BindCommand(ViewModel, vm => vm.SubUpdateCmd, v => v.menuSubUpdate).DisposeWith(disposables);
+            this.BindCommand(ViewModel, vm => vm.SubUpdateCmd, v => v.updateSubscriptionsButton).DisposeWith(disposables);
+            ViewModel.SubUpdateCmd.IsExecuting
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
+                .Subscribe(updating => updateSubscriptionsButton.Content = updating ? "Обновляем…" : "Обновить")
+                .DisposeWith(disposables);
             this.BindCommand(ViewModel, vm => vm.SubUpdateViaProxyCmd, v => v.menuSubUpdateViaProxy).DisposeWith(disposables);
             this.BindCommand(ViewModel, vm => vm.SubGroupUpdateCmd, v => v.menuSubGroupUpdate).DisposeWith(disposables);
             this.BindCommand(ViewModel, vm => vm.SubGroupUpdateViaProxyCmd, v => v.menuSubGroupUpdateViaProxy).DisposeWith(disposables);

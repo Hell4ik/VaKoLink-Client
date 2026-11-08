@@ -108,7 +108,7 @@
                 <Grid>
                     <Grid x:Name="connectionPage" Margin="24,22,24,24">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="2*" MinWidth="290" />
                             <ColumnDefinition Width="16" />
                             <ColumnDefinition Width="3*" />
                         </Grid.ColumnDefinitions>
@@ -116,9 +116,14 @@
                         <Border Padding="13,16,13,12" Style="{StaticResource PultCardStyle}">
                             <DockPanel>
                                 <DockPanel DockPanel.Dock="Top" Margin="5,0,5,10">
-                                    <Button x:Name="measureLatencyButton" DockPanel.Dock="Right" Click="MeasureLatencyButton_Click"
-                                            Style="{StaticResource PultButton}" Content="Задержка ↻"
-                                            ToolTip="Измерить задержку всех нод" />
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <Button x:Name="updateSubscriptionsButton" Width="91" Height="34" Margin="0,0,6,0" Padding="4,0"
+                                                FontSize="12" Style="{StaticResource PultButton}" Content="Обновить"
+                                                ToolTip="Обновить все включённые подписки без прокси" />
+                                        <Button x:Name="measureLatencyButton" Width="96" Height="34" Padding="4,0"
+                                                FontSize="12" Style="{StaticResource PultButton}" Content="Задержка ↻" Click="MeasureLatencyButton_Click"
+                                                ToolTip="Измерить задержку всех нод" />
+                                    </StackPanel>
                                     <TextBlock VerticalAlignment="Center" FontSize="17" FontWeight="SemiBold" Text="Ноды" />
                                 </DockPanel>
                                 <Grid>
