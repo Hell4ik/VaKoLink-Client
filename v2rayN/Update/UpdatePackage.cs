@@ -12,6 +12,7 @@ internal static class UpdatePackage
     internal const string ClientName = "VaKoLink.exe";
     internal const string PendingName = "pending.txt";
     internal const string ResultName = "result.txt";
+    internal const string InstalledResultPrefix = "Установлен VaKoLink v";
     internal const string InstallCommand = "--vakolink-install";
     internal const string RecoverCommand = "--vakolink-recover";
     internal const string ResumeCommand = "--vakolink-resume";
@@ -41,6 +42,14 @@ internal static class UpdatePackage
     }
 
     internal static string AssetName(string version) => $"VaKoLink-v{version}-windows-x64-update.zip";
+
+    internal static bool IsInstalledResult(string result, string installedVersion)
+    {
+        // v1.16 also wrote this prefix, followed by the version and the backup location.
+        return result.StartsWith(InstalledResultPrefix, StringComparison.Ordinal) &&
+            TryParseVersion(result[InstalledResultPrefix.Length..].Split(' ', 2)[0].TrimEnd('.'), out var resultVersion) &&
+            TryParseVersion(installedVersion, out var installed) && resultVersion == installed;
+    }
 
     internal static bool IsSha256(string? value) =>
         value is { Length: 64 } && value.All(Uri.IsHexDigit);

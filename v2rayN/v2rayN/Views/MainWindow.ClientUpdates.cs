@@ -15,6 +15,7 @@ public partial class MainWindow
     private string? _clientTransaction;
     private CancellationTokenSource? _clientUpdateCancellation;
     private bool _installingClient;
+    private bool _showWhatsNew;
 
     private async Task<string> CheckClientUpdateAsync(VaKoLinkConnection connection)
     {
@@ -150,13 +151,31 @@ public partial class MainWindow
             if (ClientUpdateProcess.TakeResult() is { } result)
             {
                 Logging.SaveLog(result);
-                MainSnackbar.MessageQueue?.Enqueue(result);
+                if (UpdatePackage.IsInstalledResult(result, InstalledClientVersion))
+                {
+                    _showWhatsNew = true;
+                    ShowWhatsNewWhenVisible();
+                }
+                else
+                {
+                    MainSnackbar.MessageQueue?.Enqueue(result);
+                }
             }
         }
         catch (IOException ex)
         {
             Logging.SaveLog("Чтение результата установки VaKoLink", ex);
         }
+    }
+
+    private void ShowWhatsNewWhenVisible()
+    {
+        if (!_showWhatsNew || !IsVisible || WindowState == WindowState.Minimized)
+        {
+            return;
+        }
+        _showWhatsNew = false;
+        new WhatsNewWindow(InstalledClientVersion) { Owner = this }.Show();
     }
 
     private void EndClientUpdate()

@@ -44,6 +44,8 @@ public partial class MainWindow
         checkUpdateButton.Click += CheckUpdateButton_Click;
         clientUpdateAction.Click += ClientUpdateAction_Click;
         Loaded += (_, _) => ShowPreviousClientUpdateResult();
+        IsVisibleChanged += (_, _) => ShowWhatsNewWhenVisible();
+        StateChanged += (_, _) => ShowWhatsNewWhenVisible();
         menuUpdateViaProxy.IsChecked = _config.CheckUpdateItem.UpdateViaProxy;
         menuUpdateViaProxy.Click += async (_, _) =>
         {

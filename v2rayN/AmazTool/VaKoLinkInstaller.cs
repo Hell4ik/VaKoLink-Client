@@ -54,7 +54,7 @@ internal static class VaKoLinkInstaller
                         throw new InvalidDataException("Неверная версия пакета.");
                     }
                     await InstallAsync(root, work, transaction, expected, args[4]);
-                    report = $"Установлен VaKoLink v{args[3]}.";
+                    report = $"{UpdatePackage.InstalledResultPrefix}{args[3]}.";
                 }
                 exitCode = 0;
                 restart = true;
