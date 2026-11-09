@@ -1,6 +1,7 @@
 using v2rayN.Manager;
 using v2rayN.ViewModels;
 using v2rayN.Views;
+using VaKoLink.Updates;
 
 namespace v2rayN;
 
@@ -43,6 +44,21 @@ public partial class App
         {
             ProgramStarted.Set();
             Environment.Exit(0);
+            return;
+        }
+
+        try
+        {
+            if (!ClientUpdateProcess.CanStart())
+            {
+                Environment.Exit(0);
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            UI.Show($"Не удалось открыть VaKoLink во время обновления. {ex.Message}");
+            Environment.Exit(1);
             return;
         }
 

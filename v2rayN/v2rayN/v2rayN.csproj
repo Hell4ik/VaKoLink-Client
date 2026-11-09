@@ -14,7 +14,11 @@
 		<SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<CETCompat>false</CETCompat>
-		<VaKoLinkRevision>15</VaKoLinkRevision>
+		<VaKoLinkRevision>16</VaKoLinkRevision>
+		<VaKoLinkVersion>1.$(VaKoLinkRevision)</VaKoLinkVersion>
+		<FileVersion>$(VaKoLinkVersion).0.0</FileVersion>
+		<InformationalVersion>$(VaKoLinkVersion)</InformationalVersion>
+		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -40,6 +44,8 @@
 		<Resource Include="Resources\v2rayN.ico" />
 		<Resource Include="Resources\VaKoLink.ico;Resources\VaKoLinkTray.ico" />
 		<AssemblyMetadata Include="VaKoLinkRevision" Value="$(VaKoLinkRevision)" />
+		<AssemblyMetadata Include="VaKoLinkVersion" Value="$(VaKoLinkVersion)" />
+		<Compile Include="..\Update\UpdatePackage.cs" Link="Update\UpdatePackage.cs" />
 	</ItemGroup>
 
 	<ItemGroup>

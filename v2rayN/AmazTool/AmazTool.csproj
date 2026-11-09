@@ -5,6 +5,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<Compile Include="..\Update\UpdatePackage.cs" Link="Update\UpdatePackage.cs" />
 		<EmbeddedResource Update="Resx\Resource.resx">
 			<Generator>ResXFileCodeGenerator</Generator>
 			<LastGenOutput>Resource.Designer.cs</LastGenOutput>

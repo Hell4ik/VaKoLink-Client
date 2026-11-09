@@ -1,5 +1,4 @@
 using System.Net;
-using System.Reflection;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -27,9 +26,7 @@ public partial class MainWindow
     {
         InitializeComponent();
         _config = AppManager.Instance.Config;
-        var revision = typeof(MainWindow).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
-            .Single(metadata => metadata.Key == "VaKoLinkRevision").Value;
-        Title = $"VaKoLink - V{Utils.GetVersionInfo()} (VaKoLink r{revision}) - {RuntimeInformation.ProcessArchitecture}";
+        Title = $"VaKoLink v{InstalledClientVersion} · v2rayN {Utils.GetVersionInfo()} · {RuntimeInformation.ProcessArchitecture}";
 
         if (AppManager.Instance.ConnectionModes is { } connection)
         {
@@ -42,6 +39,8 @@ public partial class MainWindow
         PreviewKeyDown += MainWindow_PreviewKeyDown;
 
         checkUpdateButton.Click += CheckUpdateButton_Click;
+        clientUpdateAction.Click += ClientUpdateAction_Click;
+        Loaded += (_, _) => ShowPreviousClientUpdateResult();
         menuUpdateViaProxy.IsChecked = _config.CheckUpdateItem.UpdateViaProxy;
         menuUpdateViaProxy.Click += async (_, _) =>
         {
@@ -142,6 +141,7 @@ public partial class MainWindow
                 {
                     _latencyCancellation?.Cancel();
                     _updateCancellation?.Cancel();
+                    EndClientUpdate();
                     _preparedUpdate?.Dispose();
                     _preparedUpdate = null;
                     StorageUI();
@@ -239,10 +239,11 @@ public partial class MainWindow
         selectedNodeName.Tag = connection?.ConnectedNodeName ?? selection?.Remarks;
         selectedNodeName.ToolTip = selectedNodeName.Tag;
         measureLatencyButton.IsEnabled = _hasNodes && _latencyCancellation is null && connection is { Ready: true, Busy: false };
-        checkUpdateButton.IsEnabled = !_selectingNode && !_updatingComponents && _preparedUpdate is null &&
+        checkUpdateButton.IsEnabled = !_selectingNode && !_updatingComponents && !_clientUpdateBusy && !_installingClient && _preparedUpdate is null &&
             connection is { Ready: true, Busy: false };
-        connectionButton.IsEnabled = !_selectingNode && connection is { Ready: true, Busy: false } &&
+        connectionButton.IsEnabled = !_selectingNode && !_installingClient && connection is { Ready: true, Busy: false } &&
             (connection.NeedsDisconnect || !string.IsNullOrEmpty(selection?.IndexId));
+        RenderClientUpdate(connection);
     }
 
     private async void MeasureLatencyButton_Click(object sender, RoutedEventArgs e)
@@ -361,11 +362,15 @@ public partial class MainWindow
     private async void CheckUpdateButton_Click(object sender, RoutedEventArgs e)
     {
         if (AppManager.Instance.ConnectionModes is not { Ready: true, Busy: false } connection ||
-            _updatingComponents || _preparedUpdate is not null)
+            _updatingComponents || _preparedUpdate is not null || _clientUpdateBusy || _installingClient)
         {
             return;
         }
+        await Task.WhenAll(CheckClientUpdateAsync(connection), CheckComponentUpdatesAsync(connection));
+    }
 
+    private async Task CheckComponentUpdatesAsync(VaKoLinkConnection connection)
+    {
         _updatingComponents = true;
         UpdateNodeControls();
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(connection.ConnectedSessionToken);
@@ -437,7 +442,7 @@ public partial class MainWindow
 
     private async Task TryInstallPreparedUpdateAsync(VaKoLinkConnection connection)
     {
-        if (_updatingComponents || _preparedUpdate is not { } batch || connection.NeedsDisconnect || connection.Busy)
+        if (_updatingComponents || _installingClient || _preparedUpdate is not { } batch || connection.NeedsDisconnect || connection.Busy)
         {
             return;
         }

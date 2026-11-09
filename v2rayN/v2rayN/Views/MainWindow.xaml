@@ -104,6 +104,16 @@
                     </DockPanel>
                 </Border>
 
+                <Border x:Name="clientUpdatePanel" DockPanel.Dock="Top" Visibility="Collapsed" Padding="19,8"
+                        Background="{DynamicResource PultCard}" BorderBrush="{DynamicResource PultOutline}" BorderThickness="0,0,0,1">
+                    <DockPanel>
+                        <Button x:Name="clientUpdateAction" DockPanel.Dock="Right" Margin="12,0,0,0" Height="34"
+                                Style="{StaticResource PultButton}" Visibility="Collapsed" />
+                        <TextBlock x:Name="clientUpdateStatus" VerticalAlignment="Center" TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite" />
+                    </DockPanel>
+                </Border>
+
                 <ContentControl x:Name="contentStatusBarView" DockPanel.Dock="Bottom" />
 
                 <Grid>

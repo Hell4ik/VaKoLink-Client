@@ -5,6 +5,19 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.FirstOrDefault() is VaKoLink.Updates.UpdatePackage.InstallCommand or VaKoLink.Updates.UpdatePackage.RecoverCommand)
+        {
+            try
+            {
+                Environment.ExitCode = VaKoLinkInstaller.RunAsync(args).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(ex.Message);
+                Environment.ExitCode = 1;
+            }
+            return;
+        }
         try
         {
             // If no arguments are provided, display usage guidelines and exit
