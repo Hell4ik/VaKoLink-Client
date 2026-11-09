@@ -70,7 +70,18 @@ public partial class App
         }
 
         AppManager.Instance.WindowDialog = new WindowDialog();
-        AppManager.Instance.ConnectionModes = new(AppManager.Instance.Config, e.Args.Contains(Global.VaKoLinkLogonArgument));
+        VaKoLinkResumeState? updateResume = null;
+        try
+        {
+            updateResume = ClientUpdateProcess.TakeResume(e.Args);
+        }
+        catch (Exception ex)
+        {
+            Logging.SaveLog("Восстановление подключения после обновления VaKoLink", ex);
+            UI.Show("Не удалось прочитать сохранённое подключение после обновления.");
+        }
+        AppManager.Instance.ConnectionModes = new(AppManager.Instance.Config,
+            e.Args.Contains(Global.VaKoLinkLogonArgument), updateResume);
 
         AppManager.Instance.InitComponents();
 

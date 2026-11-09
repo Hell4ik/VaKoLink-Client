@@ -11,106 +11,66 @@ public partial class MainWindow
         .GetCustomAttributes<AssemblyMetadataAttribute>()
         .Single(metadata => metadata.Key == "VaKoLinkVersion").Value!;
 
-    private ClientRelease? _offeredClientRelease;
+    private ClientRelease? _readyClientRelease;
     private string? _clientTransaction;
-    private string? _clientUpdateMessage;
     private CancellationTokenSource? _clientUpdateCancellation;
-    private bool _clientUpdateBusy;
     private bool _installingClient;
 
-    private async Task CheckClientUpdateAsync(VaKoLinkConnection connection)
+    private async Task<string> CheckClientUpdateAsync(VaKoLinkConnection connection)
     {
-        if (_clientTransaction is not null)
-        {
-            return;
-        }
-        _offeredClientRelease = null;
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
-        _clientUpdateCancellation = timeout;
-        _clientUpdateBusy = true;
-        _clientUpdateMessage = "Проверяем версию…";
-        UpdateNodeControls();
+        var downloading = false;
+        string? archive = null;
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(connection.ConnectedSessionToken);
+        cancellation.CancelAfter(TimeSpan.FromSeconds(25));
+        _clientUpdateCancellation = cancellation;
         try
         {
+            if (_readyClientRelease is { } ready)
+            {
+                return $"v{ready.Label} проверена и готова к установке.";
+            }
             if (!UpdatePackage.TryParseVersion(InstalledClientVersion, out var installed))
             {
                 throw new InvalidDataException("Некорректная версия установленного клиента.");
             }
             using var http = CreateClientUpdateHttp(connection);
             var feed = new ClientUpdateFeed(http, ClientUpdateFeed.GitHubReleaseRoot);
-            _offeredClientRelease = await feed.CheckAsync(installed, timeout.Token);
-            _clientUpdateMessage = _offeredClientRelease is { } release
-                ? $"Доступна v{release.Label}. Установлена v{InstalledClientVersion}."
-                : $"v{InstalledClientVersion} — актуально.";
-        }
-        catch (Exception ex)
-        {
-            Logging.SaveLog("Проверка обновления приложения VaKoLink", ex);
-            _clientUpdateMessage = ex is HttpRequestException { StatusCode: HttpStatusCode.NotFound }
-                ? "Манифест обновления недоступен (HTTP 404). Проверьте публикацию релиза и доступ к каналу."
-                : ex is OperationCanceledException
-                    ? "Истекло время проверки обновления."
-                    : $"Не удалось проверить обновление. {ex.Message}";
-        }
-        finally
-        {
-            _clientUpdateCancellation = null;
-            _clientUpdateBusy = false;
-            UpdateNodeControls();
-        }
-    }
+            if (await feed.CheckAsync(installed, cancellation.Token) is not { } release)
+            {
+                return $"v{InstalledClientVersion} — актуально.";
+            }
 
-    private async void ClientUpdateAction_Click(object sender, RoutedEventArgs e)
-    {
-        if (_clientUpdateBusy || _installingClient || _offeredClientRelease is not { } release ||
-            AppManager.Instance.ConnectionModes is not { } connection)
-        {
-            return;
-        }
-
-        if (_clientTransaction is { } transaction)
-        {
-            await InstallClientUpdateAsync(connection, release, transaction);
-        }
-        else
-        {
-            await DownloadClientUpdateAsync(connection, release);
-        }
-    }
-
-    private async Task DownloadClientUpdateAsync(VaKoLinkConnection connection, ClientRelease release)
-    {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(15));
-        _clientUpdateCancellation = timeout;
-        _clientUpdateBusy = true;
-        _clientUpdateMessage = $"Скачиваем v{release.Label}…";
-        UpdateNodeControls();
-        string? archive = null;
-        try
-        {
+            downloading = true;
+            cancellation.CancelAfter(TimeSpan.FromMinutes(15));
             var transaction = ClientUpdateProcess.CreateTransaction();
             archive = UpdatePackage.SafePath(transaction, UpdatePackage.ArchiveName);
-            using var http = CreateClientUpdateHttp(connection);
-            var feed = new ClientUpdateFeed(http, ClientUpdateFeed.GitHubReleaseRoot);
+            ShowUpdateCheckProgress($"VaKoLink v{release.Label} — скачивание");
             var progress = new Progress<int>(percent =>
             {
-                if (_clientUpdateCancellation == timeout)
+                if (_clientUpdateCancellation == cancellation)
                 {
-                    _clientUpdateMessage = $"Скачиваем v{release.Label} · {percent}%";
-                    RenderClientUpdate(connection);
+                    _clientUpdatePercent = Math.Max(_clientUpdatePercent, Math.Min(percent, 99));
+                    ShowUpdateCheckProgress($"VaKoLink v{release.Label} — скачивание");
                 }
             });
-            await feed.DownloadAsync(release, archive, progress, timeout.Token);
+            await feed.DownloadAsync(release, archive, progress, cancellation.Token);
             _clientTransaction = transaction;
+            _readyClientRelease = release;
             archive = null;
-            _clientUpdateMessage = $"Пакет v{release.Label} проверен.";
+            return $"v{release.Label} проверена и готова к установке.";
         }
         catch (Exception ex)
         {
-            Logging.SaveLog("Скачивание обновления приложения VaKoLink", ex);
-            _clientUpdateMessage = ex is OperationCanceledException
-                ? "Скачивание обновления прервано."
-                : $"Не удалось скачать обновление. {ex.Message}";
+            Logging.SaveLog(downloading ? "Скачивание обновления VaKoLink" : "Проверка обновления VaKoLink", ex);
+            if (ex is OperationCanceledException)
+            {
+                return downloading ? "скачивание прервано." : "проверка прервана.";
+            }
+            if (!downloading && ex is HttpRequestException { StatusCode: HttpStatusCode.NotFound })
+            {
+                return "манифест обновления недоступен (HTTP 404).";
+            }
+            return downloading ? $"не удалось подготовить пакет. {ex.Message}" : $"не удалось проверить версию. {ex.Message}";
         }
         finally
         {
@@ -119,55 +79,68 @@ public partial class MainWindow
                 DeleteClientUpdateArchive(archive);
             }
             _clientUpdateCancellation = null;
-            _clientUpdateBusy = false;
-            UpdateNodeControls();
+            _clientUpdatePercent = 100;
+            ShowUpdateCheckProgress("Приложение проверено");
         }
     }
 
-    private async Task InstallClientUpdateAsync(VaKoLinkConnection connection, ClientRelease release, string transaction)
+    private async void ClientUpdateAction_Click(object sender, RoutedEventArgs e)
     {
-        if (connection.NeedsDisconnect || _updatingComponents || _preparedUpdate is not null)
+        if (_checkingUpdates || _updatingComponents || _installingClient ||
+            _readyClientRelease is not { } release || _clientTransaction is not { } transaction ||
+            AppManager.Instance.ConnectionModes is not { Ready: true, Busy: false } connection)
         {
             return;
         }
-        _clientUpdateBusy = true;
+
+        _installingClient = true;
+        var started = false;
+        IsEnabled = false;
+        ShowUpdateProgress(100, "Отключение VPN перед установкой");
         UpdateNodeControls();
         try
         {
-            if (!await connection.RunWhileDisconnectedAsync(() =>
-                {
-                    ClientUpdateProcess.StartInstallation(transaction, release);
-                    _installingClient = true;
-                    IsEnabled = false;
-                    return Task.CompletedTask;
-                }))
+            started = await connection.RunInstallationAsync(async resume =>
             {
-                return;
+                var results = await InstallPendingComponentsAsync();
+                if (results.Count > 0)
+                {
+                    Logging.SaveLog(string.Join(Environment.NewLine, results));
+                }
+                ShowUpdateProgress(100, "Запуск установщика VaKoLink");
+                ClientUpdateProcess.StartInstallation(transaction, release, resume);
+            });
+            if (started)
+            {
+                await AppManager.Instance.AppExitAsync(true);
             }
-            await AppManager.Instance.AppExitAsync(true);
+            else
+            {
+                MainSnackbar.MessageQueue?.Enqueue("Установка не началась. Проверьте статус VPN.");
+            }
         }
         catch (Exception ex)
         {
             Logging.SaveLog("Запуск установки приложения VaKoLink", ex);
-            _clientUpdateMessage = $"Не удалось запустить установку. {ex.Message}";
+            MainSnackbar.MessageQueue?.Enqueue($"Не удалось запустить установку. {ex.Message}");
         }
         finally
         {
-            _clientUpdateBusy = false;
-            UpdateNodeControls();
+            if (!started)
+            {
+                _installingClient = false;
+                IsEnabled = true;
+                updateProgressPanel.Visibility = Visibility.Collapsed;
+                UpdateNodeControls();
+            }
         }
     }
 
     private void RenderClientUpdate(VaKoLinkConnection? connection)
     {
-        clientUpdatePanel.Visibility = _clientUpdateMessage is null ? Visibility.Collapsed : Visibility.Visible;
-        clientUpdateStatus.Text = "Приложение VaKoLink — " + _clientUpdateMessage +
-            (_clientTransaction is not null && connection?.NeedsDisconnect == true ? " Отключите VPN для установки." : "");
-        clientUpdateAction.Visibility = _offeredClientRelease is null ? Visibility.Collapsed : Visibility.Visible;
-        clientUpdateAction.Content = _clientTransaction is null ? "Скачать обновление" : "Установить";
-        clientUpdateAction.IsEnabled = !_clientUpdateBusy && !_installingClient &&
-            (_clientTransaction is null || connection is { Ready: true, Busy: false, NeedsDisconnect: false } &&
-                !_updatingComponents && _preparedUpdate is null);
+        clientUpdateAction.Visibility = _clientTransaction is null ? Visibility.Collapsed : Visibility.Visible;
+        clientUpdateAction.IsEnabled = !_checkingUpdates && !_updatingComponents && !_installingClient &&
+            connection is { Ready: true, Busy: false };
     }
 
     private void ShowPreviousClientUpdateResult()
@@ -176,8 +149,8 @@ public partial class MainWindow
         {
             if (ClientUpdateProcess.TakeResult() is { } result)
             {
-                _clientUpdateMessage = result;
-                UpdateNodeControls();
+                Logging.SaveLog(result);
+                MainSnackbar.MessageQueue?.Enqueue(result);
             }
         }
         catch (IOException ex)

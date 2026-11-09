@@ -18,6 +18,9 @@ public partial class MainWindow
     private bool _hasNodes;
     private bool _selectingNode;
     private bool _updatingComponents;
+    private bool _checkingUpdates;
+    private int _clientUpdatePercent;
+    private int _componentUpdatePercent;
     private CancellationTokenSource? _latencyCancellation;
     private CancellationTokenSource? _updateCancellation;
     private UpdateService.VaKoLinkUpdateBatch? _preparedUpdate;
@@ -26,7 +29,7 @@ public partial class MainWindow
     {
         InitializeComponent();
         _config = AppManager.Instance.Config;
-        Title = $"VaKoLink v{InstalledClientVersion} · v2rayN {Utils.GetVersionInfo()} · {RuntimeInformation.ProcessArchitecture}";
+        Title = $"VaKoLink v{InstalledClientVersion} · {RuntimeInformation.ProcessArchitecture}";
 
         if (AppManager.Instance.ConnectionModes is { } connection)
         {
@@ -239,7 +242,7 @@ public partial class MainWindow
         selectedNodeName.Tag = connection?.ConnectedNodeName ?? selection?.Remarks;
         selectedNodeName.ToolTip = selectedNodeName.Tag;
         measureLatencyButton.IsEnabled = _hasNodes && _latencyCancellation is null && connection is { Ready: true, Busy: false };
-        checkUpdateButton.IsEnabled = !_selectingNode && !_updatingComponents && !_clientUpdateBusy && !_installingClient && _preparedUpdate is null &&
+        checkUpdateButton.IsEnabled = !_selectingNode && !_updatingComponents && !_checkingUpdates && !_installingClient &&
             connection is { Ready: true, Busy: false };
         connectionButton.IsEnabled = !_selectingNode && !_installingClient && connection is { Ready: true, Busy: false } &&
             (connection.NeedsDisconnect || !string.IsNullOrEmpty(selection?.IndexId));
@@ -362,17 +365,41 @@ public partial class MainWindow
     private async void CheckUpdateButton_Click(object sender, RoutedEventArgs e)
     {
         if (AppManager.Instance.ConnectionModes is not { Ready: true, Busy: false } connection ||
-            _updatingComponents || _preparedUpdate is not null || _clientUpdateBusy || _installingClient)
+            _checkingUpdates || _updatingComponents || _installingClient)
         {
             return;
         }
-        await Task.WhenAll(CheckClientUpdateAsync(connection), CheckComponentUpdatesAsync(connection));
+        _checkingUpdates = true;
+        _clientUpdatePercent = _componentUpdatePercent = 0;
+        ShowUpdateCheckProgress("Проверка версий");
+        UpdateNodeControls();
+        try
+        {
+            var client = CheckClientUpdateAsync(connection);
+            var components = CheckComponentUpdatesAsync(connection);
+            await Task.WhenAll(client, components);
+
+            var results = await InstallPreparedComponentsAsync(connection) ?? await components;
+            ShowUpdateReport([$"VaKoLink — {await client}", .. results]);
+        }
+        finally
+        {
+            _checkingUpdates = false;
+            updateProgressPanel.Visibility = Visibility.Collapsed;
+            UpdateNodeControls();
+        }
+        await TryInstallPreparedUpdateAsync(connection);
     }
 
-    private async Task CheckComponentUpdatesAsync(VaKoLinkConnection connection)
+    private async Task<IReadOnlyList<string>> CheckComponentUpdatesAsync(VaKoLinkConnection connection)
     {
-        _updatingComponents = true;
-        UpdateNodeControls();
+        if (_preparedUpdate is { } existing)
+        {
+            _componentUpdatePercent = 100;
+            ShowUpdateCheckProgress("Компоненты проверены");
+            return PendingComponentReport(existing);
+        }
+
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(connection.ConnectedSessionToken);
         _updateCancellation = cancellation;
         var updateViaProxy = _config.CheckUpdateItem.UpdateViaProxy;
@@ -380,71 +407,58 @@ public partial class MainWindow
             ? new WebProxy($"socks5://{Global.Loopback}:{port}")
             : null;
         var viaTun = connection.IsConnected && connection.UseTun;
-        var preparing = true;
-        var displayedPercent = 0;
         var progress = new Progress<(int Percent, string Stage)>(value =>
         {
-            if (preparing && value.Percent >= displayedPercent)
+            if (_updateCancellation == cancellation && value.Percent >= _componentUpdatePercent)
             {
-                displayedPercent = value.Percent;
-                ShowUpdateProgress(value.Percent, value.Stage);
+                _componentUpdatePercent = value.Percent;
+                ShowUpdateCheckProgress(value.Stage);
             }
         });
 
-        ShowUpdateProgress(0, "Проверка версий");
         try
         {
             var service = new UpdateService(_config, (_, _) => Task.CompletedTask);
             var batch = await service.PrepareVaKoLinkUpdatesAsync(proxy, useSystemProxy: updateViaProxy && !connection.IsConnected,
                 progress, cancellation.Token, viaTun);
-            preparing = false;
-            if (!batch.HasChanges)
-            {
-                using (batch)
-                {
-                    ShowUpdateProgress(100, "Проверка завершена");
-                    ShowUpdateReport(batch.Preview);
-                }
-            }
-            else
+            if (batch.HasChanges)
             {
                 _preparedUpdate = batch;
-                if (connection.NeedsDisconnect)
-                {
-                    ShowUpdateProgress(100, "Ожидание отключения VPN");
-                    ShowUpdateReport([.. batch.Preview, "", "Скачанные обновления установятся после отключения VPN."]);
-                }
+                return PendingComponentReport(batch);
+            }
+            using (batch)
+            {
+                return batch.Preview;
             }
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
-            MainSnackbar.MessageQueue?.Enqueue("Соединение изменилось. Запустите проверку обновлений снова.");
+            return ComponentCheckError("проверка прервана. Запустите её снова.");
         }
         catch (Exception ex)
         {
             Logging.SaveLog("Обновление компонентов VaKoLink", ex);
-            ShowUpdateReport([$"Ошибка обновления. {ex.Message}"]);
+            return ComponentCheckError($"ошибка проверки. {ex.Message}");
         }
         finally
         {
-            preparing = false;
             _updateCancellation = null;
-            _updatingComponents = false;
-            if (_preparedUpdate is null)
-            {
-                updateProgressPanel.Visibility = Visibility.Collapsed;
-            }
-            UpdateNodeControls();
+            _componentUpdatePercent = 100;
+            ShowUpdateCheckProgress("Компоненты проверены");
         }
-
-        await TryInstallPreparedUpdateAsync(connection);
     }
 
-    private async Task TryInstallPreparedUpdateAsync(VaKoLinkConnection connection)
+    private static IReadOnlyList<string> ComponentCheckError(string reason) =>
+        [$"Xray — {reason}", $"mihomo — {reason}", $"sing-box — {reason}", $"geoFiles — {reason}"];
+
+    private static IReadOnlyList<string> PendingComponentReport(UpdateService.VaKoLinkUpdateBatch batch) =>
+        [.. batch.Preview, "", "Скачанные компоненты будут установлены после отключения VPN."];
+
+    private async Task<IReadOnlyList<string>?> InstallPreparedComponentsAsync(VaKoLinkConnection connection)
     {
-        if (_updatingComponents || _installingClient || _preparedUpdate is not { } batch || connection.NeedsDisconnect || connection.Busy)
+        if (_preparedUpdate is null || connection.NeedsDisconnect || connection.Busy)
         {
-            return;
+            return null;
         }
 
         _updatingComponents = true;
@@ -452,35 +466,55 @@ public partial class MainWindow
         try
         {
             IReadOnlyList<string>? results = null;
-            await connection.RunWhileDisconnectedAsync(async () =>
-            {
-                _preparedUpdate = null;
-                using (batch)
-                {
-                    ShowUpdateProgress(100, "Установка обновлений");
-                    results = await batch.InstallAsync();
-                }
-            });
-            if (results is not null)
-            {
-                ShowUpdateReport(results);
-            }
-        }
-        catch (Exception ex)
-        {
-            Logging.SaveLog("Установка компонентов VaKoLink", ex);
-            ShowUpdateReport([$"Ошибка установки. {ex.Message}"]);
+            await connection.RunWhileDisconnectedAsync(async () => results = await InstallPendingComponentsAsync());
+            return results;
         }
         finally
         {
             _updatingComponents = false;
-            if (_preparedUpdate is null)
-            {
-                updateProgressPanel.Visibility = Visibility.Collapsed;
-            }
             UpdateNodeControls();
         }
     }
+
+    private async Task<IReadOnlyList<string>> InstallPendingComponentsAsync()
+    {
+        if (_preparedUpdate is not { } batch)
+        {
+            return [];
+        }
+        _preparedUpdate = null;
+        using (batch)
+        {
+            ShowUpdateProgress(100, "Установка компонентов");
+            return await batch.InstallAsync();
+        }
+    }
+
+    private async Task TryInstallPreparedUpdateAsync(VaKoLinkConnection connection)
+    {
+        if (_checkingUpdates || _updatingComponents || _installingClient)
+        {
+            return;
+        }
+        try
+        {
+            if (await InstallPreparedComponentsAsync(connection) is { } results)
+            {
+                Logging.SaveLog(string.Join(Environment.NewLine, results));
+                MainSnackbar.MessageQueue?.Enqueue("Установка компонентов завершена. Результаты в журнале.");
+            }
+        }
+        finally
+        {
+            if (!_checkingUpdates && !_installingClient)
+            {
+                updateProgressPanel.Visibility = Visibility.Collapsed;
+            }
+        }
+    }
+
+    private void ShowUpdateCheckProgress(string stage) =>
+        ShowUpdateProgress((_clientUpdatePercent + _componentUpdatePercent) / 2, stage);
 
     private void ShowUpdateProgress(int percent, string stage)
     {
@@ -495,7 +529,7 @@ public partial class MainWindow
         Logging.SaveLog(report);
         if (IsVisible)
         {
-            MessageBox.Show(this, report, "Обновления компонентов", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, report, "Обновления VaKoLink", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         else
         {

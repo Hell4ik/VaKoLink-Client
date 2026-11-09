@@ -1,7 +1,7 @@
 namespace ServiceLib.Manager;
 
 [SupportedOSPlatform("windows")]
-public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = false)
+public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = false, VaKoLinkResumeState? updateResume = null)
 {
     private readonly SemaphoreSlim _transition = new(1, 1);
     private readonly string _tunName = $"VaKoLink-{Utils.GetMd5(Utils.StartupPath())[..8]}";
@@ -42,7 +42,8 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
             action = "добавить встроенные правила VaKoLink";
             await VaKoLinkRouting.EnsureInstalledAsync();
             Ready = true;
-            if (launchedAtLogon && config.GuiItem.AutoRun && config.VaKoLinkResume is { } resume)
+            var resume = updateResume ?? (launchedAtLogon && config.GuiItem.AutoRun ? config.VaKoLinkResume : null);
+            if (resume is not null)
             {
                 await TransitionAsync(async () =>
                 {
@@ -55,6 +56,11 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
                     config.VaKoLinkUseTun = resume.UseTun;
                     await StartAsync(profile);
                 });
+                if (updateResume is not null && !IsConnected)
+                {
+                    Status = $"После обновления не удалось восстановить VPN. {Status}";
+                    Changed?.Invoke();
+                }
                 return;
             }
         }
@@ -208,6 +214,46 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
             Busy = true;
             Changed?.Invoke();
             await operation();
+            return true;
+        }
+        finally
+        {
+            Busy = false;
+            _transition.Release();
+            Changed?.Invoke();
+        }
+    }
+
+    public async Task<bool> RunInstallationAsync(Func<VaKoLinkResumeState?, Task> install)
+    {
+        if (!await _transition.WaitAsync(0))
+        {
+            return false;
+        }
+        try
+        {
+            if (!Ready || _closing)
+            {
+                return false;
+            }
+            Busy = true;
+            Changed?.Invoke();
+            var resume = _connected && _connectedProfile is { } profile
+                ? new VaKoLinkResumeState(profile.IndexId, profile.Remarks, UseTun)
+                : null;
+            try
+            {
+                await StopAsync();
+            }
+            catch (Exception ex)
+            {
+                Logging.SaveLog(nameof(VaKoLinkConnection), ex);
+                Status = $"Не удалось отключить VPN перед установкой. {ex.Message}";
+                return false;
+            }
+
+            await install(resume);
+            _closing = true;
             return true;
         }
         finally

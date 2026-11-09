@@ -57,7 +57,7 @@
                 <Border DockPanel.Dock="Top" Padding="19,10" Background="{DynamicResource PultHeader}" BorderBrush="{DynamicResource PultOutline}" BorderThickness="0,0,0,1">
                     <DockPanel LastChildFill="True">
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <StackPanel x:Name="updateProgressPanel" Width="194" Margin="0,0,12,0"
+                            <StackPanel x:Name="updateProgressPanel" Width="145" Margin="0,0,12,0"
                                         VerticalAlignment="Center" Visibility="Collapsed">
                                 <TextBlock x:Name="updatePercent" FontWeight="SemiBold" TextAlignment="Right" />
                                 <TextBlock x:Name="updateStage" Opacity="0.8" TextAlignment="Right" TextTrimming="CharacterEllipsis"
@@ -66,6 +66,8 @@
                             <Button x:Name="checkUpdateButton" Margin="0,0,8,0"
                                     MinWidth="193"
                                     Style="{StaticResource PultButton}" Content="Проверить обновления" />
+                            <Button x:Name="clientUpdateAction" Margin="0,0,8,0" MinWidth="100"
+                                    Style="{StaticResource PultButton}" Content="Установить" Visibility="Collapsed" />
                             <Border Height="42" MinWidth="71" CornerRadius="10" Background="{DynamicResource PultControl}" BorderBrush="{DynamicResource PultControlOutline}" BorderThickness="1"><Menu VerticalAlignment="Center" HorizontalAlignment="Center" Background="Transparent">
                                 <MenuItem x:Name="mainMenu" Padding="14,8" Header="Меню" FlowDirection="RightToLeft">
                                     <MenuItem Header="Импорт" FlowDirection="LeftToRight">
@@ -101,16 +103,6 @@
                             </Menu></Border>
                         </StackPanel>
                         <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource PultMuted}" Text="ПОДКЛЮЧЕНИЕ" />
-                    </DockPanel>
-                </Border>
-
-                <Border x:Name="clientUpdatePanel" DockPanel.Dock="Top" Visibility="Collapsed" Padding="19,8"
-                        Background="{DynamicResource PultCard}" BorderBrush="{DynamicResource PultOutline}" BorderThickness="0,0,0,1">
-                    <DockPanel>
-                        <Button x:Name="clientUpdateAction" DockPanel.Dock="Right" Margin="12,0,0,0" Height="34"
-                                Style="{StaticResource PultButton}" Visibility="Collapsed" />
-                        <TextBlock x:Name="clientUpdateStatus" VerticalAlignment="Center" TextWrapping="Wrap"
-                                   AutomationProperties.LiveSetting="Polite" />
                     </DockPanel>
                 </Border>
 

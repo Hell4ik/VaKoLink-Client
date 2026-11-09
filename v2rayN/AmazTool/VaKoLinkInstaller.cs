@@ -54,16 +54,17 @@ internal static class VaKoLinkInstaller
                         throw new InvalidDataException("Неверная версия пакета.");
                     }
                     await InstallAsync(root, work, transaction, expected, args[4]);
-                    report = $"Установлен VaKoLink v{args[3]}. Резервная копия: {Path.Combine(transaction, "backup")}";
+                    report = $"Установлен VaKoLink v{args[3]}.";
                 }
                 exitCode = 0;
                 restart = true;
             }
             catch (Exception ex)
             {
+                Console.Error.WriteLine(ex);
                 restart = !File.Exists(pending);
                 report = restart
-                    ? $"Не удалось установить VaKoLink. Прежняя версия сохранена. {ex.Message}"
+                    ? "Обновление не установлено. Прежняя версия сохранена."
                     : $"Не удалось восстановить VaKoLink. Резервная копия: {Path.Combine(transaction, "backup")}. {ex.Message}";
                 exitCode = 1;
             }
@@ -85,11 +86,17 @@ internal static class VaKoLinkInstaller
         Console.WriteLine(report);
         if (restart)
         {
-            using var client = Process.Start(new ProcessStartInfo(executable)
+            var start = new ProcessStartInfo(executable)
             {
                 WorkingDirectory = root,
                 UseShellExecute = false
-            });
+            };
+            if (File.Exists(UpdatePackage.SafePath(transaction, UpdatePackage.ResumeName)))
+            {
+                start.ArgumentList.Add(UpdatePackage.ResumeCommand);
+                start.ArgumentList.Add(id);
+            }
+            using var client = Process.Start(start);
         }
         return exitCode;
     }

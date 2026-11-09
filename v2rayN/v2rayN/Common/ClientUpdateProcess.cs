@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 
 namespace VaKoLink.Updates;
 
@@ -56,7 +57,23 @@ internal static class ClientUpdateProcess
         return text;
     }
 
-    internal static void StartInstallation(string transaction, ClientRelease release)
+    internal static VaKoLinkResumeState? TakeResume(string[] args)
+    {
+        if (args is not [UpdatePackage.ResumeCommand, var id] || !UpdatePackage.IsTransactionId(id))
+        {
+            return null;
+        }
+        var marker = UpdatePackage.SafePath(Work, $"{id}/{UpdatePackage.ResumeName}");
+        if (!File.Exists(marker))
+        {
+            return null;
+        }
+        var json = File.ReadAllText(marker);
+        File.Delete(marker);
+        return JsonSerializer.Deserialize<VaKoLinkResumeState>(json);
+    }
+
+    internal static void StartInstallation(string transaction, ClientRelease release, VaKoLinkResumeState? resume)
     {
         if (!IsPortableClient)
         {
@@ -64,6 +81,14 @@ internal static class ClientUpdateProcess
         }
         var helper = UpdatePackage.SafePath(transaction, UpdatePackage.HelperName);
         File.Copy(UpdatePackage.SafePath(Root, UpdatePackage.HelperName), helper, overwrite: true);
+        if (resume is not null)
+        {
+            UpdatePackage.WriteMarker(transaction, UpdatePackage.ResumeName, JsonSerializer.Serialize(resume));
+        }
+        else
+        {
+            File.Delete(UpdatePackage.SafePath(transaction, UpdatePackage.ResumeName));
+        }
         StartHelper(transaction, UpdatePackage.InstallCommand, release.Label, release.Sha256);
     }
 

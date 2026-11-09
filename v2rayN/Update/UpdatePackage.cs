@@ -14,6 +14,8 @@ internal static class UpdatePackage
     internal const string ResultName = "result.txt";
     internal const string InstallCommand = "--vakolink-install";
     internal const string RecoverCommand = "--vakolink-recover";
+    internal const string ResumeCommand = "--vakolink-resume";
+    internal const string ResumeName = "resume.json";
     internal const long MaxArchiveSize = 512L * 1024 * 1024;
     private const long MaxUnpackedSize = 1024L * 1024 * 1024;
 
