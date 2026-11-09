@@ -8,6 +8,7 @@ public class Config
     public string IndexId { get; set; }
     public string SubIndexId { get; set; }
     public bool VaKoLinkUseTun { get; set; }
+    public VaKoLinkResumeState? VaKoLinkResume { get; set; }
 
     #endregion property
 
@@ -39,3 +40,5 @@ public class Config
 
     #endregion other entities
 }
+
+public sealed record VaKoLinkResumeState(string NodeId, string NodeName, bool UseTun);

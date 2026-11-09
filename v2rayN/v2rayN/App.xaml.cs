@@ -24,9 +24,20 @@ public partial class App
     /// <param name="e"></param>
     protected override void OnStartup(StartupEventArgs e)
     {
-        var exePathKey = Utils.GetMd5(Utils.GetExePath());
+        AppManager.Instance.UseVaKoLinkProfile = true;
+        var exePathKey = Utils.GetMd5("VaKoLink:" + Utils.GetBaseDirectory().ToUpperInvariant());
 
         var rebootas = e.Args.Any(t => t == Global.RebootAs);
+        if (!rebootas && EventWaitHandle.TryOpenExisting(
+                Utils.GetMd5(Utils.GetBaseDirectory("v2rayN.exe")), out var legacyInstance))
+        {
+            using (legacyInstance)
+            {
+                legacyInstance.Set();
+            }
+            Environment.Exit(0);
+            return;
+        }
         ProgramStarted = new EventWaitHandle(false, EventResetMode.AutoReset, exePathKey, out var bCreatedNew);
         if (!rebootas && !bCreatedNew)
         {
@@ -35,7 +46,6 @@ public partial class App
             return;
         }
 
-        AppManager.Instance.UseVaKoLinkProfile = true;
         if (!AppManager.Instance.InitApp())
         {
             UI.Show($"Loading GUI configuration file is abnormal,please restart the application{Environment.NewLine}加载GUI配置文件异常,请重启应用");
@@ -44,7 +54,7 @@ public partial class App
         }
 
         AppManager.Instance.WindowDialog = new WindowDialog();
-        AppManager.Instance.ConnectionModes = new(AppManager.Instance.Config);
+        AppManager.Instance.ConnectionModes = new(AppManager.Instance.Config, e.Args.Contains(Global.VaKoLinkLogonArgument));
 
         AppManager.Instance.InitComponents();
 
@@ -64,6 +74,7 @@ public partial class App
         MainWindow = mainWindow;
         WindowsUtils.SetDarkBorder(mainWindow, AppManager.Instance.Config.UiItem.CurrentTheme);
         mainWindow.Show();
+        AutoStartupHandler.EnsureVaKoLinkLogonTask(AppManager.Instance.Config);
     }
 
     private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

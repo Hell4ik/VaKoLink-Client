@@ -61,13 +61,15 @@ public static class AutoStartupHandler
         {
             var autoRunName = GetAutoRunNameWindows();
             var exePath = Utils.GetExePath();
+            var argument = AppManager.Instance.UseVaKoLinkProfile ? Global.VaKoLinkLogonArgument : null;
             if (Utils.IsAdministrator())
             {
-                AutoStartTaskService(autoRunName, exePath, "");
+                AutoStartTaskService(autoRunName, exePath, "", argument);
             }
             else
             {
-                WindowsUtils.RegWriteValue(Global.AutoRunRegPath, autoRunName, exePath.AppendQuotes());
+                WindowsUtils.RegWriteValue(Global.AutoRunRegPath, autoRunName,
+                    argument is null ? exePath.AppendQuotes() : $"{exePath.AppendQuotes()} {argument}");
             }
         }
         catch (Exception ex)
@@ -85,7 +87,7 @@ public static class AutoStartupHandler
     /// <param name="description"></param>
     /// <exception cref="ArgumentNullException"></exception>
     [SupportedOSPlatform("windows")]
-    public static void AutoStartTaskService(string taskName, string fileName, string description)
+    public static void AutoStartTaskService(string taskName, string fileName, string description, string? arguments = null)
     {
         if (taskName.IsNullOrEmpty())
         {
@@ -94,13 +96,9 @@ public static class AutoStartupHandler
 
         var logonUser = WindowsIdentity.GetCurrent().Name;
         using var taskService = new Microsoft.Win32.TaskScheduler.TaskService();
-        var tasks = taskService.RootFolder.GetTasks(new Regex(taskName));
         if (fileName.IsNullOrEmpty())
         {
-            foreach (var t in tasks)
-            {
-                taskService.RootFolder.DeleteTask(t.Name);
-            }
+            taskService.RootFolder.DeleteTask(taskName, exceptionOnNotExists: false);
             return;
         }
 
@@ -114,9 +112,38 @@ public static class AutoStartupHandler
         task.Settings.Priority = ProcessPriorityClass.Normal;
         task.Triggers.Add(new Microsoft.Win32.TaskScheduler.LogonTrigger { UserId = logonUser });
         task.Principal.RunLevel = Microsoft.Win32.TaskScheduler.TaskRunLevel.Highest;
-        task.Actions.Add(new Microsoft.Win32.TaskScheduler.ExecAction(fileName.AppendQuotes(), null, Path.GetDirectoryName(fileName)));
+        task.Actions.Add(new Microsoft.Win32.TaskScheduler.ExecAction(fileName, arguments, Path.GetDirectoryName(fileName)));
 
         taskService.RootFolder.RegisterTaskDefinition(taskName, task);
+    }
+
+    [SupportedOSPlatform("windows")]
+    public static void EnsureVaKoLinkLogonTask(Config config)
+    {
+        var exe = Utils.GetExePath();
+        if (!config.GuiItem.AutoRun || !Utils.IsAdministrator() ||
+            !string.Equals(Path.GetFileName(exe), "VaKoLink.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+        try
+        {
+            var name = GetAutoRunNameWindows();
+            using var service = new Microsoft.Win32.TaskScheduler.TaskService();
+            using var task = service.GetTask(name);
+            if (task?.Definition.Actions.FirstOrDefault() is Microsoft.Win32.TaskScheduler.ExecAction action &&
+                string.Equals(action.Path.Trim('"'), exe, StringComparison.OrdinalIgnoreCase) &&
+                action.Arguments == Global.VaKoLinkLogonArgument)
+            {
+                return;
+            }
+            AutoStartTaskService(name, exe, "VaKoLink", Global.VaKoLinkLogonArgument);
+            WindowsUtils.RegWriteValue(Global.AutoRunRegPath, name, "");
+        }
+        catch (Exception ex)
+        {
+            Logging.SaveLog(_tag, ex);
+        }
     }
 
     private static string GetAutoRunNameWindows()

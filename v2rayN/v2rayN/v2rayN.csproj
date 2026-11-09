@@ -5,13 +5,16 @@
 		<TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
 		<GenerateSatelliteAssembliesForCore>true</GenerateSatelliteAssembliesForCore>
 		<UseWPF>true</UseWPF>
-		<ApplicationIcon>Resources\v2rayN.ico</ApplicationIcon>
+		<AssemblyName>VaKoLink</AssemblyName>
+		<RootNamespace>v2rayN</RootNamespace>
+		<Product>VaKoLink</Product>
+		<ApplicationIcon>Resources\VaKoLink.ico</ApplicationIcon>
 		<ApplicationManifest>app.manifest</ApplicationManifest>
 		<ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
 		<SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<CETCompat>false</CETCompat>
-		<VaKoLinkRevision>14</VaKoLinkRevision>
+		<VaKoLinkRevision>15</VaKoLinkRevision>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -35,6 +38,7 @@
 		<Resource Include="Resources\NotifyIcon4.ico" />
 		<Resource Include="Resources\VaKoLinkProxy.ico" />
 		<Resource Include="Resources\v2rayN.ico" />
+		<Resource Include="Resources\VaKoLink.ico;Resources\VaKoLinkTray.ico" />
 		<AssemblyMetadata Include="VaKoLinkRevision" Value="$(VaKoLinkRevision)" />
 	</ItemGroup>
 

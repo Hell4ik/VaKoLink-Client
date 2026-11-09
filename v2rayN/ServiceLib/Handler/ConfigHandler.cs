@@ -4,6 +4,7 @@ namespace ServiceLib.Handler;
 
 public static class ConfigHandler
 {
+    private static readonly SemaphoreSlim _saveConfigLock = new(1, 1);
     private static readonly string _configRes = Global.ConfigFileName;
     private static readonly string _tag = "ConfigHandler";
 
@@ -204,6 +205,7 @@ public static class ConfigHandler
     /// <returns>0 if successful, -1 if failed</returns>
     public static async Task<int> SaveConfig(Config config)
     {
+        await _saveConfigLock.WaitAsync();
         try
         {
             //save temp file
@@ -224,6 +226,10 @@ public static class ConfigHandler
         {
             Logging.SaveLog(_tag, ex);
             return -1;
+        }
+        finally
+        {
+            _saveConfigLock.Release();
         }
 
         return 0;
@@ -2069,6 +2075,7 @@ public static class ConfigHandler
         }
         List<ProfileItem>? lstOriSub = null;
         ProfileItem? activeProfile = null;
+        var resume = config.VaKoLinkResume;
         if (isSub && subid.IsNotEmpty())
         {
             lstOriSub = await AppManager.Instance.ProfileItems(subid);
@@ -2134,10 +2141,17 @@ public static class ConfigHandler
         }
 
         //Select active node
-        if (activeProfile != null)
+        var resumeProfile = lstOriSub?.FirstOrDefault(t => t.IndexId == resume?.NodeId);
+        if (activeProfile != null || resumeProfile != null)
         {
             var lstSub = await AppManager.Instance.ProfileItems(subid);
-            var existItem = FindMatchedProfileItem(lstSub, activeProfile);
+            if (resumeProfile != null && config.VaKoLinkResume == resume &&
+                FindMatchedProfileItem(lstSub, resumeProfile) is { } matched)
+            {
+                config.VaKoLinkResume = resume! with { NodeId = matched.IndexId, NodeName = matched.Remarks };
+                await SaveConfig(config);
+            }
+            var existItem = activeProfile is null ? null : FindMatchedProfileItem(lstSub, activeProfile);
             if (existItem != null)
             {
                 await ConfigHandler.SetDefaultServerIndex(config, existItem.IndexId);

@@ -1,5 +1,14 @@
 namespace v2rayN.Views;
 
+public sealed class PultActiveNodeConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture) =>
+        values[0] is string nodeId && values[1] is string activeId && nodeId == activeId;
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
 public sealed class PultNodeLabelConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)

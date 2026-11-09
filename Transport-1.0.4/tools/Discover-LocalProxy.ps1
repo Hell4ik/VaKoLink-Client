@@ -4,12 +4,12 @@ $ErrorActionPreference='Stop'
 # Only processes descending from the running v2rayN GUI, never node/outbound credentials.
 $all=@(Get-CimInstance Win32_Process)
 $session=[Diagnostics.Process]::GetCurrentProcess().SessionId
-$guis=@($all|Where-Object{$_.Name -eq 'v2rayN.exe' -and [int]$_.SessionId -eq $session})
+$guis=@($all|Where-Object{$_.Name -in @('VaKoLink.exe','v2rayN.exe') -and [int]$_.SessionId -eq $session})
 $result=@()
 foreach($gui in $guis){
  $ids=@([int]$gui.ProcessId)
  for($depth=0;$depth -lt 4;$depth++){$ids=@($ids+@($all|Where-Object{[int]$_.ParentProcessId -in $ids}|ForEach-Object{[int]$_.ProcessId})|Select-Object -Unique)}
- $members=@($all|Where-Object{[int]$_.ProcessId -in $ids -and $_.Name -in @('v2rayN.exe','xray.exe','v2ray.exe','sing-box.exe')})
+ $members=@($all|Where-Object{[int]$_.ProcessId -in $ids -and $_.Name -in @('VaKoLink.exe','v2rayN.exe','xray.exe','v2ray.exe','sing-box.exe','mihomo.exe')})
  $clients=@($members|ForEach-Object{$p=Get-Process -Id $_.ProcessId -ErrorAction Stop
   [ordered]@{Pid=[int]$_.ProcessId;Name=$_.Name;Path=$_.ExecutablePath;BirthUtc=$p.StartTime.ToUniversalTime().ToString('o')}})
  $fingerprints=@()

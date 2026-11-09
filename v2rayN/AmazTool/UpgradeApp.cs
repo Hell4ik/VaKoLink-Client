@@ -21,14 +21,20 @@ internal class UpgradeApp
         Console.WriteLine(Resx.Resource.TryTerminateProcess);
         try
         {
-            var existing = Process.GetProcessesByName(Utils.V2rayN);
-            foreach (var pp in existing)
+            var names = OperatingSystem.IsWindows() ? Utils.WindowsClientNames : [Utils.V2rayN];
+            foreach (var name in names)
             {
-                var path = pp.MainModule?.FileName ?? "";
-                if (path.StartsWith(Utils.GetPath(Utils.V2rayN)))
+                var expectedPath = Utils.GetPath(OperatingSystem.IsWindows() ? $"{name}.exe" : name);
+                foreach (var process in Process.GetProcessesByName(name))
                 {
-                    pp?.Kill();
-                    pp?.WaitForExit(1000);
+                    using (process)
+                    {
+                        if (string.Equals(process.MainModule?.FileName, expectedPath, Utils.GetPathComparison()))
+                        {
+                            process.Kill();
+                            process.WaitForExit(1000);
+                        }
+                    }
                 }
             }
         }

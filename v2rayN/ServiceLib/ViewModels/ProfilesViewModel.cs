@@ -25,6 +25,7 @@ public partial class ProfilesViewModel : MyReactiveObject
     #region ObservableCollection
 
     public BulkObservableCollection<ProfileItemModel> ProfileItems { get; } = [];
+    public bool ShowNodeEditorGroups { get; set; }
 
     public BulkObservableCollection<SubItem> SubItems { get; } = [];
 
@@ -360,7 +361,7 @@ public partial class ProfilesViewModel : MyReactiveObject
 
     public async Task RefreshServersBiz()
     {
-        var lstModel = AppManager.Instance.UseVaKoLinkProfile
+        var lstModel = AppManager.Instance.UseVaKoLinkProfile && !ShowNodeEditorGroups
             ? await GetProfileItemsEx(string.Empty, string.Empty)
             : await GetProfileItemsEx(_config.SubIndexId, _serverFilter);
 
@@ -576,6 +577,13 @@ public partial class ProfilesViewModel : MyReactiveObject
     {
         if (indexId.IsNullOrEmpty())
         {
+            return;
+        }
+        if (OperatingSystem.IsWindows() && reload &&
+            AppManager.Instance.ConnectionModes is { IsConnected: true } connection)
+        {
+            await connection.SwitchNodeAsync(indexId);
+            await RefreshServers();
             return;
         }
         if (indexId == _config.IndexId)

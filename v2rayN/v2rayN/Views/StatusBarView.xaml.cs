@@ -1,4 +1,5 @@
 using System.Windows.Media.Imaging;
+using System.Windows.Media;
 using v2rayN.Manager;
 
 namespace v2rayN.Views;
@@ -6,7 +7,7 @@ namespace v2rayN.Views;
 public partial class StatusBarView
 {
     private static Config _config;
-    private string? _vaKoLinkTrayIcon;
+    private string? _vaKoLinkTrayStatus;
 
     public StatusBarView()
     {
@@ -114,21 +115,37 @@ public partial class StatusBarView
 
     internal void SetVaKoLinkTrayState(bool connected, bool useTun, bool transportRunning)
     {
-        var (icon, status) = (connected, useTun, transportRunning) switch
+        var (badge, status) = (connected, useTun, transportRunning) switch
         {
-            (_, _, true) => ("NotifyIcon3.ico", "Proxy + Transport"),
-            (true, true, _) => ("NotifyIcon2.ico", "TUN подключён"),
-            (true, false, _) => ("VaKoLinkProxy.ico", "Proxy подключён"),
-            _ => ("NotifyIcon1.ico", "Отключено")
+            (_, _, true) => (Brushes.MediumPurple, "Proxy + Transport"),
+            (true, true, _) => (Brushes.Tomato, "TUN подключён"),
+            (true, false, _) => (Brushes.LimeGreen, "Proxy подключён"),
+            _ => (null, "Отключено")
         };
-        if (_vaKoLinkTrayIcon == icon)
+        if (_vaKoLinkTrayStatus == status)
         {
             return;
         }
 
-        tbNotify.IconSource = BitmapFrame.Create(new Uri($"pack://application:,,,/v2rayN;component/Resources/{icon}"));
+        var icon = BitmapFrame.Create(new Uri("pack://application:,,,/VaKoLink;component/Resources/VaKoLinkTray.ico"));
+        if (badge is null)
+        {
+            tbNotify.IconSource = icon;
+        }
+        else
+        {
+            var visual = new DrawingVisual();
+            using (var drawing = visual.RenderOpen())
+            {
+                drawing.DrawImage(icon, new Rect(0, 0, 32, 32));
+                drawing.DrawEllipse(badge, new Pen(Brushes.Black, 1.5), new Point(25, 25), 6, 6);
+            }
+            var rendered = new RenderTargetBitmap(32, 32, 96, 96, PixelFormats.Pbgra32);
+            rendered.Render(visual);
+            tbNotify.IconSource = rendered;
+        }
         tbNotify.ToolTipText = $"VaKoLink — {status}";
-        _vaKoLinkTrayIcon = icon;
+        _vaKoLinkTrayStatus = status;
     }
 
     private async void menuExit_Click(object sender, RoutedEventArgs e)

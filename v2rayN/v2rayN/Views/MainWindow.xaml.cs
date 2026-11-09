@@ -58,11 +58,13 @@ public partial class MainWindow
         };
         menuLog.Click += (_, _) => ShowAdvanced(logHost, "Журнал");
         menuTheme.Click += (_, _) => ShowAdvanced(themeHost, "Оформление");
+        menuNodeEditor.Click += (_, _) => ShowAdvanced(nodeEditorHost, "Управление нодами");
         menuAbout.Click += (_, _) => MessageBox.Show(this, Title,
             "О программе", MessageBoxButton.OK, MessageBoxImage.Information);
         menuBackupAndRestore.Click += MenuBackupAndRestore_Click;
         backButton.Click += (_, _) =>
         {
+            SetNodeEditorGroups(false);
             advancedPage.Visibility = Visibility.Collapsed;
             connectionPage.Visibility = Visibility.Visible;
         };
@@ -167,11 +169,13 @@ public partial class MainWindow
     {
         var transport = new VaKoLinkTransport(() => Transport104.PrepareAsync(connection));
         connection.BeforeCoreStop = transport.StopBeforeVpnAsync;
+        connection.IsTransportRunning = () => transport.IsRunning;
+        connection.RestartTransport = transport.ToggleAsync;
 
         void RenderTransport()
         {
             var reason = Transport104.GetUnavailableReason(connection);
-            transportButton.IsEnabled = !transport.Busy && (transport.NeedsStop || reason is null);
+            transportButton.IsEnabled = !connection.Busy && !transport.Busy && (transport.NeedsStop || reason is null);
             transportButton.Content = transport.CleanupPending ? "Завершить"
                 : transport.NeedsStop ? "Остановить" : "Запустить";
             transportStatus.Text = !transport.Busy && !transport.NeedsStop && reason is not null
@@ -189,11 +193,12 @@ public partial class MainWindow
             modeTun.IsChecked = connection.UseTun;
             modeProxy.IsEnabled = modeTun.IsEnabled = connection.Ready && !connection.Busy;
             connectionButton.Content = connection.NeedsDisconnect && !connection.IsConnecting ? "Отключить" : "Подключить";
-            connectionStatus.Text = connection.Status;
-            var connected = connection.IsConnected;
+            connectionStatus.Text = connection.IsSwitchingNode ? "Переподключение…" : connection.Status;
+            var connected = connection.IsConnected && !connection.IsSwitchingNode;
+            nodeList.Tag = connected ? connection.ConnectedNodeId : null;
             connectionCard.SetResourceReference(Border.BackgroundProperty, connected ? "PultConnected" : "PultCard");
             connectionCard.SetResourceReference(Border.BorderBrushProperty, connected ? "PultConnectedOutline" : "PultOutline");
-            var statusBrush = connected ? "PultGood" : connection.IsConnecting ? "PultAccent" : "PultMuted";
+            var statusBrush = connected ? "PultGood" : connection.IsConnecting || connection.IsSwitchingNode ? "PultAccent" : "PultMuted";
             connectionIndicator.SetResourceReference(Shape.FillProperty, statusBrush);
             connectionStatus.SetResourceReference(TextBlock.ForegroundProperty, statusBrush);
             UpdateNodeControls();
@@ -210,6 +215,17 @@ public partial class MainWindow
         modeTun.Click += async (_, _) => await connection.SelectAsync(true);
         connectionButton.Click += async (_, _) => await ToggleConnectionAsync(connection);
         transportButton.Click += async (_, _) => await transport.ToggleAsync();
+        nodeList.MouseDoubleClick += async (_, e) =>
+        {
+            if (e.ChangedButton == MouseButton.Left && connection is { IsConnected: true, Busy: false } && !transport.Busy &&
+                e.OriginalSource is DependencyObject origin &&
+                ItemsControl.ContainerFromElement(nodeList, origin) is ListBoxItem { Content: ProfileItemModel node } &&
+                node.IndexId != connection.ConnectedNodeId)
+            {
+                e.Handled = true;
+                await connection.SwitchNodeAsync(node.IndexId);
+            }
+        };
         RenderConnection();
     }
 
@@ -219,7 +235,7 @@ public partial class MainWindow
         var selection = nodeList.SelectedItem as ProfileItemModel;
         nodeList.Visibility = _hasNodes ? Visibility.Visible : Visibility.Collapsed;
         emptyNodes.Visibility = _hasNodes ? Visibility.Collapsed : Visibility.Visible;
-        nodeList.IsEnabled = !_selectingNode && connection is { Busy: false, NeedsDisconnect: false };
+        nodeList.IsEnabled = !_selectingNode && connection is { Busy: false };
         selectedNodeName.Tag = connection?.ConnectedNodeName ?? selection?.Remarks;
         selectedNodeName.ToolTip = selectedNodeName.Tag;
         measureLatencyButton.IsEnabled = _hasNodes && _latencyCancellation is null && connection is { Ready: true, Busy: false };
@@ -488,11 +504,27 @@ public partial class MainWindow
         {
             themeHost.Content ??= new ThemeSettingView(ThemeSettings);
         }
+        if (content == nodeEditorHost && nodeEditorHost.Content is null)
+        {
+            ViewHost.Show(nodeEditorHost, ViewModel.ProfilesViewModel);
+        }
+        SetNodeEditorGroups(content == nodeEditorHost);
         advancedTitle.Text = title;
         logHost.Visibility = content == logHost ? Visibility.Visible : Visibility.Collapsed;
         themeHost.Visibility = content == themeHost ? Visibility.Visible : Visibility.Collapsed;
+        nodeEditorHost.Visibility = content == nodeEditorHost ? Visibility.Visible : Visibility.Collapsed;
         connectionPage.Visibility = Visibility.Collapsed;
         advancedPage.Visibility = Visibility.Visible;
+    }
+
+    private void SetNodeEditorGroups(bool show)
+    {
+        var profiles = ViewModel.ProfilesViewModel;
+        if (profiles.ShowNodeEditorGroups != show)
+        {
+            profiles.ShowNodeEditorGroups = show;
+            _ = profiles.RefreshServers();
+        }
     }
 
     private void OnProgramStarted(object state, bool timeout)

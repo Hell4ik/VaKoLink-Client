@@ -11,7 +11,7 @@
     MinWidth="680"
     MinHeight="510"
     x:TypeArguments="vms:MainWindowViewModel"
-    Icon="/Resources/v2rayN.ico"
+    Icon="/Resources/VaKoLink.ico"
     Style="{StaticResource WindowGlobal}"
     WindowStartupLocation="CenterScreen">
 
@@ -82,6 +82,7 @@
                                     </MenuItem>
                                     <MenuItem Header="Настройки" FlowDirection="LeftToRight">
                                         <MenuItem x:Name="menuOptionSetting" Header="Расширенные настройки" />
+                                        <MenuItem x:Name="menuNodeEditor" Header="Управление нодами" />
                                         <MenuItem x:Name="menuUpdateViaProxy" Header="Обновлять через прокси" IsCheckable="True" />
                                         <MenuItem x:Name="menuRoutingSetting" Header="Правила маршрутизации" />
                                         <MenuItem x:Name="menuDNSSetting" Header="DNS" />
@@ -195,6 +196,7 @@
                         <Grid>
                             <ContentControl x:Name="logHost" Visibility="Collapsed" />
                             <ContentControl x:Name="themeHost" Visibility="Collapsed" />
+                            <ContentControl x:Name="nodeEditorHost" Visibility="Collapsed" />
                         </Grid>
                     </DockPanel>
                     <materialDesign:Snackbar x:Name="MainSnackbar" MessageQueue="{materialDesign:MessageQueue}" />

@@ -191,7 +191,13 @@ public partial class ProfilesView
 
     private void LstProfiles_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (_config.UiItem.DoubleClick2Activate)
+        if (e.ChangedButton != MouseButton.Left ||
+            e.OriginalSource is not DependencyObject origin ||
+            ItemsControl.ContainerFromElement(lstProfiles, origin) is not DataGridRow)
+        {
+            return;
+        }
+        if (_config.UiItem.DoubleClick2Activate && !AppManager.Instance.UseVaKoLinkProfile)
         {
             ViewModel?.SetDefaultServer();
         }

@@ -32,7 +32,7 @@ $clientRoot = 'public static string Root => AppContext.GetData("VaKoLink.Client.
 if (!$text.Contains($originalRoot)) { throw 'Unexpected Transport data-root declaration.' }
 [IO.File]::WriteAllText($plan, $text.Replace($originalRoot, $clientRoot))
 
-# The integrated probe runs inside v2rayN.exe, which also matches the process loop guard.
+# The integrated probe runs inside VaKoLink.exe, which also matches the process loop guard.
 # Give only UDP on the authenticated diagnostic inbound precedence over that guard.
 $text = [IO.File]::ReadAllText($plan)
 $probeRule = 'rules.Insert(1, new JsonObject { ["inbound"] = new JsonArray("discord-check"), ["network"] = "udp", ["action"] = "route", ["outbound"] = "discord-media" });'
@@ -57,6 +57,12 @@ $method = @'
 $text = $text.Replace('    public ProxyProbe? LastProbe { get; private set; }', $method + [Environment]::NewLine + '    public ProxyProbe? LastProbe { get; private set; }')
 [IO.File]::WriteAllText($runtime, $text)
 
+$discoveryScript = Join-Path $staged 'tools/Discover-LocalProxy.ps1'
+$text = [IO.File]::ReadAllText($discoveryScript)
+$text = $text.Replace("Name -eq 'v2rayN.exe'", "Name -in @('VaKoLink.exe','v2rayN.exe')")
+$text = $text.Replace("@('v2rayN.exe','xray.exe','v2ray.exe','sing-box.exe')", "@('VaKoLink.exe','v2rayN.exe','xray.exe','v2ray.exe','sing-box.exe','mihomo.exe')")
+[IO.File]::WriteAllText($discoveryScript, $text)
+
 $options = @('-c', 'Release', '-r', 'win-x64', '-p:SelfContained=true', '-p:EnableWindowsTargeting=true', '--nologo')
 & $Dotnet publish (Join-Path $repo 'v2rayN/v2rayN/v2rayN.csproj') @options "-p:VaKoLinkTransportSourceRoot=$staged" "-p:VaKoLinkTransportCore=$core" -o $output
 if ($LASTEXITCODE -ne 0) { throw "VaKoLink publish failed ($LASTEXITCODE)." }
@@ -71,4 +77,4 @@ Assert-Sha256 (Join-Path $package $license) $licenseEntry[0].SHA256
 New-Item -ItemType Directory -Path (Join-Path $output 'third-party') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $package $license) -Destination (Join-Path $output $license)
 
-Write-Output (Join-Path $output 'v2rayN.exe')
+Write-Output (Join-Path $output 'VaKoLink.exe')

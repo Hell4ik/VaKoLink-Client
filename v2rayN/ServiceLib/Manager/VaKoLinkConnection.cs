@@ -1,7 +1,7 @@
 namespace ServiceLib.Manager;
 
 [SupportedOSPlatform("windows")]
-public sealed class VaKoLinkConnection(Config config)
+public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = false)
 {
     private readonly SemaphoreSlim _transition = new(1, 1);
     private readonly string _tunName = $"VaKoLink-{Utils.GetMd5(Utils.StartupPath())[..8]}";
@@ -11,19 +11,25 @@ public sealed class VaKoLinkConnection(Config config)
     private bool _requiresPreCore;
     private bool _closing;
     private bool _connected;
+    private ProfileItem? _connectedProfile;
+    private bool _restartingTransport;
     private CancellationTokenSource? _monitor;
 
     public event Action? Changed;
     public bool Ready { get; private set; }
     public bool Busy { get; private set; }
     public bool IsConnecting { get; private set; }
+    public bool IsSwitchingNode { get; private set; }
     public bool UseTun => config.VaKoLinkUseTun;
     public bool IsConnected => _connected;
-    public string? ConnectedNodeName { get; private set; }
+    public string? ConnectedNodeId => _connectedProfile?.IndexId;
+    public string? ConnectedNodeName => _connectedProfile?.Remarks;
     public int? ConnectedProxyPort { get; private set; }
     public CancellationToken ConnectedSessionToken { get; private set; }
-    public bool IsProxyReady => _connected && !UseTun && !Busy && !_closing;
+    public bool IsProxyReady => _connected && !UseTun && (!Busy || _restartingTransport) && !_closing;
     public Func<Task>? BeforeCoreStop { get; set; }
+    public Func<bool>? IsTransportRunning { get; set; }
+    public Func<Task>? RestartTransport { get; set; }
     public bool NeedsDisconnect => _ownsCore || _proxy is not null;
     public string Status { get; private set; } = "Отключено";
 
@@ -36,6 +42,21 @@ public sealed class VaKoLinkConnection(Config config)
             action = "добавить встроенные правила VaKoLink";
             await VaKoLinkRouting.EnsureInstalledAsync();
             Ready = true;
+            if (launchedAtLogon && config.GuiItem.AutoRun && config.VaKoLinkResume is { } resume)
+            {
+                await TransitionAsync(async () =>
+                {
+                    var profile = await AppManager.Instance.GetProfileItem(resume.NodeId);
+                    if (profile is null)
+                    {
+                        Status = $"Нода «{resume.NodeName}» больше недоступна. Выберите другую ноду.";
+                        return;
+                    }
+                    config.VaKoLinkUseTun = resume.UseTun;
+                    await StartAsync(profile);
+                });
+                return;
+            }
         }
         catch (Exception ex)
         {
@@ -49,7 +70,14 @@ public sealed class VaKoLinkConnection(Config config)
     {
         if (NeedsDisconnect)
         {
-            await StopAsync();
+            try
+            {
+                await SaveResumeAsync(null);
+            }
+            finally
+            {
+                await StopAsync();
+            }
         }
         else
         {
@@ -85,12 +113,85 @@ public sealed class VaKoLinkConnection(Config config)
 
     public Task ReloadAsync() => TransitionAsync(async () =>
     {
-        if (_connected)
+        if (_connectedProfile is not { } previous)
+        {
+            return;
+        }
+        var profile = await AppManager.Instance.GetProfileItem(config.VaKoLinkResume?.NodeId ?? previous.IndexId);
+        if (profile is null)
+        {
+            Status = $"Нода «{previous.Remarks}» исчезла из подписки. Выберите другую ноду.";
+            return;
+        }
+        await ReplaceConnectionAsync(profile, previous);
+    });
+
+    public Task SwitchNodeAsync(string nodeId) => TransitionAsync(async () =>
+    {
+        if (_connectedProfile is not { } previous || nodeId == previous.IndexId)
+        {
+            return;
+        }
+        var profile = await AppManager.Instance.GetProfileItem(nodeId);
+        if (profile is null)
+        {
+            Status = "Выбранная нода больше недоступна. Выберите другую ноду.";
+            return;
+        }
+        await ReplaceConnectionAsync(profile, previous);
+    }, wait: false);
+
+    private async Task ReplaceConnectionAsync(ProfileItem target, ProfileItem previous)
+    {
+        IsSwitchingNode = true;
+        Changed?.Invoke();
+        var restartTransport = !UseTun && IsTransportRunning?.Invoke() == true;
+        string? recoveredFrom = null;
+        try
         {
             await StopAsync();
-            await StartAsync();
+            await StartAsync(target);
         }
-    });
+        catch (Exception ex)
+        {
+            Logging.SaveLog(nameof(VaKoLinkConnection), ex);
+            if (IsConnected)
+            {
+                Status = $"Не удалось переключить ноду. {ex.Message}";
+                return;
+            }
+            try
+            {
+                await StopAsync();
+                await StartAsync(previous);
+                recoveredFrom = ex.Message;
+            }
+            catch (Exception rollback)
+            {
+                throw new InvalidOperationException($"Новая нода не подключилась. {ex.Message} " +
+                    $"Прежнее подключение не восстановлено. {rollback.Message}", rollback);
+            }
+        }
+
+        if (recoveredFrom is not null)
+        {
+            Status = $"Прежняя нода восстановлена. Новая нода не подключилась. {recoveredFrom}";
+        }
+        IsSwitchingNode = false;
+        Changed?.Invoke();
+        if (restartTransport && RestartTransport is { } restart)
+        {
+            _restartingTransport = true;
+            try
+            {
+                await restart();
+            }
+            finally
+            {
+                _restartingTransport = false;
+            }
+        }
+    }
 
     public async Task<bool> RunWhileDisconnectedAsync(Func<Task> operation)
     {
@@ -140,9 +241,16 @@ public sealed class VaKoLinkConnection(Config config)
         }
     }
 
-    private async Task TransitionAsync(Func<Task> action)
+    private async Task TransitionAsync(Func<Task> action, bool wait = true)
     {
-        await _transition.WaitAsync();
+        if (wait)
+        {
+            await _transition.WaitAsync();
+        }
+        else if (!await _transition.WaitAsync(0))
+        {
+            return;
+        }
         try
         {
             if (!Ready || _closing)
@@ -159,6 +267,10 @@ public sealed class VaKoLinkConnection(Config config)
             try
             {
                 await StopAsync();
+                if (config.VaKoLinkResume is not null)
+                {
+                    await SaveResumeAsync(null);
+                }
                 Status = $"Ошибка подключения. {ex.Message}";
             }
             catch (Exception cleanup)
@@ -170,13 +282,14 @@ public sealed class VaKoLinkConnection(Config config)
         finally
         {
             IsConnecting = false;
+            IsSwitchingNode = false;
             Busy = false;
             _transition.Release();
             Changed?.Invoke();
         }
     }
 
-    private async Task StartAsync()
+    private async Task StartAsync(ProfileItem? profile = null)
     {
         IsConnecting = true;
         Status = "Подключение…";
@@ -185,7 +298,7 @@ public sealed class VaKoLinkConnection(Config config)
         var routing = VaKoLinkRouting.ForMode(useTun);
         Logging.SaveLog($"VaKoLink routing: {(useTun ? "TUN" : "Proxy")} -> {routing.Remarks}");
 
-        var profile = await ConfigHandler.GetDefaultServer(config);
+        profile ??= await ConfigHandler.GetDefaultServer(config);
         if (profile is null)
         {
             throw new InvalidOperationException("Выберите профиль сервера в списке.");
@@ -262,10 +375,21 @@ public sealed class VaKoLinkConnection(Config config)
             _proxy.Enable(config, port);
         }
 
+        var previousIndex = config.IndexId;
+        config.IndexId = profile.IndexId;
+        try
+        {
+            await SaveResumeAsync(new(profile.IndexId, profile.Remarks, useTun));
+        }
+        catch
+        {
+            config.IndexId = previousIndex;
+            throw;
+        }
         ConnectedProxyPort = useTun ? null : port;
         _monitor = new();
         ConnectedSessionToken = _monitor.Token;
-        ConnectedNodeName = profile.Remarks;
+        _connectedProfile = profile;
         _connected = true;
         IsConnecting = false;
         Status = "Подключено";
@@ -282,7 +406,7 @@ public sealed class VaKoLinkConnection(Config config)
         _monitor?.Dispose();
         _monitor = null;
         _connected = false;
-        ConnectedNodeName = null;
+        _connectedProfile = null;
         ConnectedProxyPort = null;
         ConnectedSessionToken = default;
         try
@@ -340,7 +464,25 @@ public sealed class VaKoLinkConnection(Config config)
         }
         catch (Exception ex)
         {
-            await TransitionAsync(() => token.IsCancellationRequested ? Task.CompletedTask : Task.FromException(ex));
+            await TransitionAsync(async () =>
+            {
+                if (!token.IsCancellationRequested)
+                {
+                    await SaveResumeAsync(null);
+                    await Task.FromException(ex);
+                }
+            });
+        }
+    }
+
+    private async Task SaveResumeAsync(VaKoLinkResumeState? state)
+    {
+        var previous = config.VaKoLinkResume;
+        config.VaKoLinkResume = state;
+        if (await ConfigHandler.SaveConfig(config) != 0)
+        {
+            config.VaKoLinkResume = previous;
+            throw new IOException("Не удалось сохранить состояние подключения.");
         }
     }
 

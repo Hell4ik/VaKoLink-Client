@@ -48,14 +48,23 @@ internal class Utils
 
     public static string V2rayN => "v2rayN";
 
+    public static string[] WindowsClientNames { get; } = ["VaKoLink", "v2rayN"];
+
     public static void StartV2RayN()
     {
+        var executable = OperatingSystem.IsWindows()
+            ? WindowsClientNames.Select(name => GetPath($"{name}.exe")).FirstOrDefault(File.Exists)
+            : V2rayN;
+        if (executable is null)
+        {
+            return;
+        }
         Process process = new()
         {
             StartInfo = new()
             {
                 UseShellExecute = true,
-                FileName = V2rayN,
+                FileName = executable,
                 WorkingDirectory = StartupPath()
             }
         };
