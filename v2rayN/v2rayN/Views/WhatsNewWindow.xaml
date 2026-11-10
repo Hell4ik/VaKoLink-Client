@@ -20,8 +20,7 @@
                 Style="{StaticResource PultButton}" IsDefault="True" Content="Понятно" Click="Dismiss_Click" />
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel>
-                <TextBlock Margin="0,0,0,12" TextWrapping="Wrap"><Run FontWeight="SemiBold">1. Автоматическая регистрация устройств.</Run> Для подписок с одобрением VaKoLink сам отправляет заявку. После одобрения обновите подписку, чтобы получить ноды.</TextBlock>
-                <TextBlock TextWrapping="Wrap"><Run FontWeight="SemiBold">2. Выравнивание кнопки «Меню».</Run> Надпись теперь по центру кнопки и на одной линии с «Проверить обновления».</TextBlock>
+                <TextBlock TextWrapping="Wrap"><Run FontWeight="SemiBold">1. Обновлено скачивание новой версии.</Run> VaKoLink загружает большие пакеты параллельными частями, если сервер это поддерживает. Прогресс пакета виден отдельно, а скачивание может продолжаться дольше 15 минут.</TextBlock>
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

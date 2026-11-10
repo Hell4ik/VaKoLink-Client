@@ -1,19 +1,23 @@
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
+using ServiceLib.Helper;
+using ServiceLib.Models.Dto;
 
 namespace VaKoLink.Updates;
 
 internal sealed record ClientRelease(string Label, Version Version, string Sha256);
 
-internal sealed class ClientUpdateFeed(HttpClient http, Uri releaseRoot)
+internal sealed class ClientUpdateFeed(Func<HttpMessageHandler> createTransport, Uri releaseRoot)
 {
     internal static readonly Uri GitHubReleaseRoot = new("https://github.com/Hell4ik/VaKoLink-Client/releases/");
     private const int ManifestLimit = 16 * 1024;
 
     internal async Task<ClientRelease?> CheckAsync(Version installed, CancellationToken token)
     {
-        using var response = await GetAsync(new Uri(releaseRoot, "latest/download/vakolink-update.json"), token);
+        using var http = new HttpClient(new ReleaseHandler(createTransport(), releaseRoot, archive: false));
+        using var response = await http.GetAsync(new Uri(releaseRoot, "latest/download/vakolink-update.json"),
+            HttpCompletionOption.ResponseHeadersRead, token);
         if (response.Content.Headers.ContentLength > ManifestLimit)
         {
             throw new InvalidDataException("Манифест VaKoLink слишком большой.");
@@ -42,93 +46,101 @@ internal sealed class ClientUpdateFeed(HttpClient http, Uri releaseRoot)
         CancellationToken token)
     {
         var url = new Uri(releaseRoot, $"download/v{release.Label}/{UpdatePackage.AssetName(release.Label)}");
-        using var response = await GetAsync(url, token);
-        var length = response.Content.Headers.ContentLength;
-        if (length is <= 0 or > UpdatePackage.MaxArchiveSize)
-        {
-            throw new InvalidDataException("Неверный размер пакета VaKoLink.");
-        }
-
-        await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None,
-            128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
-        await using var input = await response.Content.ReadAsStreamAsync(token);
-        var buffer = new byte[128 * 1024];
-        long total = 0;
+        var request = new FileDownloadRequest { FileUrl = url.AbsoluteUri, FilePath = destination };
+        FileDownloadState? result = null;
         var displayedPercent = 0;
-        int read;
-        while ((read = await input.ReadAsync(buffer, token)) != 0)
+        await DownloaderHelper.Instance.DownloadFileAsync(null, request, state =>
         {
-            total += read;
-            if (total > UpdatePackage.MaxArchiveSize || total > length)
+            if (state.Completed)
             {
-                throw new InvalidDataException("Превышен допустимый размер пакета VaKoLink.");
+                result = state;
             }
-            await output.WriteAsync(buffer.AsMemory(0, read), token);
-            if (length is > 0)
+            else if (state.TotalBytes > 0)
             {
-                var percent = (int)Math.Min(99, total * 100 / length.Value);
+                var percent = (int)Math.Min(99, state.DownloadedBytes * 100 / state.TotalBytes);
                 if (percent > displayedPercent)
                 {
                     displayedPercent = percent;
                     progress.Report(percent);
                 }
             }
+        }, token, () => new ReleaseHandler(createTransport(), releaseRoot, archive: true));
+
+        token.ThrowIfCancellationRequested();
+        if (result is null || result.Error is not null || !File.Exists(destination))
+        {
+            throw new IOException(result?.Error?.Message ?? "Загрузка пакета VaKoLink не завершилась.", result?.Error);
         }
 
-        output.Position = 0;
-        if (length is { } declared && total != declared ||
-            !await UpdatePackage.VerifyAsync(output, release.Sha256, token))
+        await using var output = File.OpenRead(destination);
+        if (!await UpdatePackage.VerifyAsync(output, release.Sha256, token))
         {
             throw new InvalidDataException("SHA-256 пакета VaKoLink не совпадает с манифестом.");
         }
         progress.Report(100);
     }
 
-    private async Task<HttpResponseMessage> GetAsync(Uri url, CancellationToken token)
+    private sealed class ReleaseHandler(HttpMessageHandler transport, Uri releaseRoot, bool archive) : DelegatingHandler(transport)
     {
-        for (var redirects = 0; redirects <= 6; redirects++)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.UserAgent.ParseAdd("VaKoLink-Updater");
-            var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
-            if (response.IsSuccessStatusCode)
+            var url = request.RequestUri!;
+            for (var redirects = 0; redirects <= 6; redirects++)
             {
-                return response;
-            }
-            using (response)
-            {
+                if (!IsAllowed(url))
+                {
+                    throw new HttpRequestException("Канал VaKoLink перенаправил запрос на неподдерживаемый адрес.");
+                }
+                using var next = new HttpRequestMessage(request.Method, url);
+                foreach (var header in request.Headers)
+                {
+                    next.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                }
+                if (next.Headers.UserAgent.Count == 0)
+                {
+                    next.Headers.UserAgent.ParseAdd("VaKoLink-Updater");
+                }
+                var response = await base.SendAsync(next, token).ConfigureAwait(false);
                 if (response.StatusCode is HttpStatusCode.MovedPermanently or HttpStatusCode.Redirect or
                     HttpStatusCode.SeeOther or HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect &&
                     response.Headers.Location is { } location)
                 {
-                    var target = location.IsAbsoluteUri ? location : new Uri(url, location);
-                    if (!IsAllowedRedirect(target))
-                    {
-                        throw new HttpRequestException("Канал VaKoLink перенаправил запрос на неподдерживаемый адрес.");
-                    }
-                    url = target;
+                    response.Dispose();
+                    url = location.IsAbsoluteUri ? location : new Uri(url, location);
                     continue;
                 }
-
-                throw new HttpRequestException($"Канал VaKoLink недоступен (HTTP {(int)response.StatusCode}).",
-                    null, response.StatusCode);
+                if (response.IsSuccessStatusCode)
+                {
+                    var length = response.StatusCode == HttpStatusCode.PartialContent
+                        ? response.Content.Headers.ContentRange?.Length
+                        : response.Content.Headers.ContentLength;
+                    if (archive && (length is null or <= 0 or > UpdatePackage.MaxArchiveSize ||
+                        response.Content.Headers.ContentLength > length))
+                    {
+                        response.Dispose();
+                        throw new InvalidDataException("Неверный размер пакета VaKoLink.");
+                    }
+                    return response;
+                }
+                response.Dispose();
+                throw new HttpRequestException($"Канал VaKoLink недоступен (HTTP {(int)response.StatusCode}).", null, response.StatusCode);
             }
+            throw new HttpRequestException("Слишком много перенаправлений канала VaKoLink.");
         }
-        throw new HttpRequestException("Слишком много перенаправлений канала VaKoLink.");
-    }
 
-    private bool IsAllowedRedirect(Uri target)
-    {
-        if (target.UserInfo.Length != 0 || target.Scheme != releaseRoot.Scheme)
+        private bool IsAllowed(Uri target)
         {
-            return false;
+            if (target.UserInfo.Length != 0 || target.Scheme != releaseRoot.Scheme)
+            {
+                return false;
+            }
+            if (target.Host == releaseRoot.Host && target.Port == releaseRoot.Port)
+            {
+                return target.AbsolutePath.StartsWith(releaseRoot.AbsolutePath, StringComparison.Ordinal);
+            }
+            return releaseRoot == GitHubReleaseRoot && target.IsDefaultPort &&
+                target.Host is "release-assets.githubusercontent.com" or "objects.githubusercontent.com" or
+                    "github-releases.githubusercontent.com";
         }
-        if (target.Host == releaseRoot.Host && target.Port == releaseRoot.Port)
-        {
-            return target.AbsolutePath.StartsWith(releaseRoot.AbsolutePath, StringComparison.Ordinal);
-        }
-        return releaseRoot == GitHubReleaseRoot && target.IsDefaultPort &&
-            target.Host is "release-assets.githubusercontent.com" or "objects.githubusercontent.com" or
-                "github-releases.githubusercontent.com";
     }
 }

@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System.Security.Authentication;
 using Downloader;
 
@@ -118,7 +119,8 @@ public class DownloaderHelper
         await using var stream = await downloader.DownloadFileTaskAsync(address: url, cancellationToken);
     }
 
-    public async Task DownloadFileAsync(IWebProxy? webProxy, FileDownloadRequest request, Action<FileDownloadState> onProgress, CancellationToken cancellationToken = default)
+    public async Task DownloadFileAsync(IWebProxy? webProxy, FileDownloadRequest request, Action<FileDownloadState> onProgress,
+        CancellationToken cancellationToken = default, Func<HttpMessageHandler>? createHandler = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.FilePath.IsNullOrEmpty())
@@ -149,7 +151,7 @@ public class DownloaderHelper
             ParallelCount = 4,
 
             RequestConfiguration = requestConfiguration,
-            CustomHttpMessageHandlerFactory = () => GetSocketsHttpHandler(requestConfiguration),
+            CustomHttpMessageHandlerFactory = createHandler ?? (() => GetSocketsHttpHandler(requestConfiguration)),
         };
 
         await using var downloader = new Downloader.DownloadService(downloadOpt);

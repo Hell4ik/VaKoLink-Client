@@ -34,15 +34,14 @@ public partial class MainWindow
             {
                 throw new InvalidDataException("Некорректная версия установленного клиента.");
             }
-            using var http = CreateClientUpdateHttp(connection);
-            var feed = new ClientUpdateFeed(http, ClientUpdateFeed.GitHubReleaseRoot);
+            var feed = new ClientUpdateFeed(() => CreateClientUpdateTransport(connection), ClientUpdateFeed.GitHubReleaseRoot);
             if (await feed.CheckAsync(installed, cancellation.Token) is not { } release)
             {
                 return $"v{InstalledClientVersion} — актуально.";
             }
 
             downloading = true;
-            cancellation.CancelAfter(TimeSpan.FromMinutes(15));
+            cancellation.CancelAfter(Timeout.InfiniteTimeSpan);
             var transaction = ClientUpdateProcess.CreateTransaction();
             archive = UpdatePackage.SafePath(transaction, UpdatePackage.ArchiveName);
             ShowUpdateCheckProgress($"VaKoLink v{release.Label} — скачивание");
@@ -51,7 +50,7 @@ public partial class MainWindow
                 if (_clientUpdateCancellation == cancellation)
                 {
                     _clientUpdatePercent = Math.Max(_clientUpdatePercent, Math.Min(percent, 99));
-                    ShowUpdateCheckProgress($"VaKoLink v{release.Label} — скачивание");
+                    ShowUpdateCheckProgress($"VaKoLink v{release.Label} — скачивание пакета {_clientUpdatePercent}%");
                 }
             });
             await feed.DownloadAsync(release, archive, progress, cancellation.Token);
@@ -78,6 +77,7 @@ public partial class MainWindow
             if (archive is not null)
             {
                 DeleteClientUpdateArchive(archive);
+                DeleteClientUpdateArchive(archive + ".download");
             }
             _clientUpdateCancellation = null;
             _clientUpdatePercent = 100;
@@ -199,18 +199,18 @@ public partial class MainWindow
         }
     }
 
-    private HttpClient CreateClientUpdateHttp(VaKoLinkConnection connection)
+    private SocketsHttpHandler CreateClientUpdateTransport(VaKoLinkConnection connection)
     {
         var updateViaProxy = _config.CheckUpdateItem.UpdateViaProxy;
         var proxy = updateViaProxy && connection.ConnectedProxyPort is { } port
             ? new WebProxy($"socks5://{Global.Loopback}:{port}")
             : null;
-        return new HttpClient(new SocketsHttpHandler
+        return new SocketsHttpHandler
         {
             UseProxy = updateViaProxy && (proxy is not null || !connection.IsConnected),
             Proxy = proxy,
             AllowAutoRedirect = false,
             ConnectTimeout = TimeSpan.FromSeconds(12)
-        });
+        };
     }
 }
