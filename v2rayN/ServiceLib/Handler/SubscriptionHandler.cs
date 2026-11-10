@@ -2,6 +2,8 @@ namespace ServiceLib.Handler;
 
 public static class SubscriptionHandler
 {
+    private static bool IsVaKoLinkWindows => OperatingSystem.IsWindows() && AppManager.Instance.UseVaKoLinkProfile;
+
     public static async Task UpdateProcess(Config config, string subId, bool blProxy, Func<bool, string, Task> updateFunc)
     {
         await updateFunc?.Invoke(false, ResUI.MsgUpdateSubscriptionStart);
@@ -16,6 +18,7 @@ public static class SubscriptionHandler
         var successCount = 0;
         foreach (var item in subItem)
         {
+            var hashCode = IsVaKoLinkWindows && item.Remarks?.Contains("://") == true ? "" : $"{item.Remarks}->";
             try
             {
                 if (!IsValidSubscription(item, subId))
@@ -23,7 +26,6 @@ public static class SubscriptionHandler
                     continue;
                 }
 
-                var hashCode = $"{item.Remarks}->";
                 if (item.Enabled == false)
                 {
                     await updateFunc?.Invoke(false, $"{hashCode}{ResUI.MsgSkipSubscriptionUpdate}");
@@ -45,11 +47,28 @@ public static class SubscriptionHandler
 
                 await updateFunc?.Invoke(false, "-------------------------------------------------------");
             }
+            catch (VaKoLinkSubscriptionException ex)
+            {
+                NoticeManager.Instance.Enqueue(ex.Message);
+                await updateFunc?.Invoke(false, ex.Message);
+                await updateFunc?.Invoke(false, "-------------------------------------------------------");
+            }
             catch (Exception ex)
             {
-                var hashCode = $"{item.Remarks}->";
-                Logging.SaveLog("UpdateSubscription", ex);
-                await updateFunc?.Invoke(false, $"{hashCode}{ResUI.MsgFailedImportSubscription}: {ex.Message}");
+                if (IsVaKoLinkWindows)
+                {
+                    var message = ex is OperationCanceledException
+                        ? "Истекло время ожидания ответа подписки."
+                        : ex is FormatException ? ResUI.SubRequestHeadersInvalid : $"Не удалось обновить подписку ({ex.GetType().Name}).";
+                    Logging.SaveLog(message);
+                    NoticeManager.Instance.Enqueue(message);
+                    await updateFunc?.Invoke(false, message);
+                }
+                else
+                {
+                    Logging.SaveLog("UpdateSubscription", ex);
+                    await updateFunc?.Invoke(false, $"{hashCode}{ResUI.MsgFailedImportSubscription}: {ex.Message}");
+                }
                 await updateFunc?.Invoke(false, "-------------------------------------------------------");
             }
         }
@@ -90,7 +109,8 @@ public static class SubscriptionHandler
         var downloadHandle = new DownloadService
         {
             AcceptHeader = "*/*",
-            RequestHeaders = requestHeaders
+            RequestHeaders = requestHeaders,
+            RedactStringDownloadErrors = IsVaKoLinkWindows
         };
         downloadHandle.Error += (sender2, args) =>
         {
@@ -99,8 +119,15 @@ public static class SubscriptionHandler
         return downloadHandle;
     }
 
-    private static async Task<string> DownloadSubscriptionContent(DownloadService downloadHandle, string url, bool blProxy, string userAgent)
+    private static async Task<string> DownloadSubscriptionContent(DownloadService downloadHandle, string url, bool blProxy,
+        string userAgent, bool allowDeviceApproval = true)
     {
+        if (IsVaKoLinkWindows && allowDeviceApproval && Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+            VaKoLinkSubscription.IsPortalSubscription(uri))
+        {
+            return await downloadHandle.DownloadVaKoLinkSubscriptionAsync(uri, blProxy, userAgent);
+        }
+
         var result = await downloadHandle.TryDownloadString(url, blProxy, userAgent);
 
         // If download with proxy fails, try direct connection
@@ -152,7 +179,8 @@ public static class SubscriptionHandler
         }
 
         // Download and return result directly
-        return await DownloadSubscriptionContent(downloadHandle, url, blProxy, item.UserAgent);
+        return await DownloadSubscriptionContent(downloadHandle, url, blProxy, item.UserAgent,
+            allowDeviceApproval: item.ConvertTarget.IsNullOrEmpty());
     }
 
     private static async Task<string> DownloadAdditionalSubscriptions(SubItem item, string mainResult, bool blProxy, DownloadService downloadHandle)
@@ -205,7 +233,7 @@ public static class SubscriptionHandler
         await updateFunc?.Invoke(false, $"{hashCode}{ResUI.MsgGetSubscriptionSuccessfully}");
 
         // If result is too short, display content directly
-        if (result.Length < 99)
+        if (!IsVaKoLinkWindows && result.Length < 99)
         {
             await updateFunc?.Invoke(false, $"{hashCode}{result}");
         }
@@ -217,7 +245,10 @@ public static class SubscriptionHandler
         if (ret <= 0)
         {
             Logging.SaveLog("FailedImportSubscription");
-            Logging.SaveLog(result);
+            if (!IsVaKoLinkWindows)
+            {
+                Logging.SaveLog(result);
+            }
         }
 
         // Update completion message

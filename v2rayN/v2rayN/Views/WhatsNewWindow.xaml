@@ -20,10 +20,8 @@
                 Style="{StaticResource PultButton}" IsDefault="True" Content="Понятно" Click="Dismiss_Click" />
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel>
-                <TextBlock Margin="0,0,0,12" TextWrapping="Wrap"><Run FontWeight="SemiBold">1. Обновлён заголовок окна.</Run> Теперь в нём отображаются название VaKoLink, версия приложения и архитектура.</TextBlock>
-                <TextBlock Margin="0,0,0,12" TextWrapping="Wrap"><Run FontWeight="SemiBold">2. Единая проверка обновлений.</Run> VaKoLink и компоненты проверяются одной кнопкой, а результаты выводятся в общей сводке. Новая версия приложения скачивается автоматически.</TextBlock>
-                <TextBlock Margin="0,0,0,12" TextWrapping="Wrap"><Run FontWeight="SemiBold">3. Установка в один клик.</Run> После нажатия «Установить» клиент сам отключает VPN и Transport, устанавливает обновление и перезапускается.</TextBlock>
-                <TextBlock TextWrapping="Wrap"><Run FontWeight="SemiBold">4. Восстановление подключения.</Run> Если VPN был активен до установки, после перезапуска клиент подключается к прежней ноде в том же режиме. Transport запускается вручную.</TextBlock>
+                <TextBlock Margin="0,0,0,12" TextWrapping="Wrap"><Run FontWeight="SemiBold">1. Автоматическая регистрация устройств.</Run> Для подписок с одобрением VaKoLink сам отправляет заявку. После одобрения обновите подписку, чтобы получить ноды.</TextBlock>
+                <TextBlock TextWrapping="Wrap"><Run FontWeight="SemiBold">2. Выравнивание кнопки «Меню».</Run> Надпись теперь по центру кнопки и на одной линии с «Проверить обновления».</TextBlock>
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

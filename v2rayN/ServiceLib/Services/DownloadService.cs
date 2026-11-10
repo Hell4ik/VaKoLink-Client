@@ -15,6 +15,8 @@ public class DownloadService
 
     public IReadOnlyDictionary<string, string>? RequestHeaders { get; init; }
 
+    internal bool RedactStringDownloadErrors { get; init; }
+
     private static readonly string _tag = "DownloadService";
 
     /// <summary>
@@ -217,12 +219,7 @@ public class DownloadService
         }
         catch (Exception ex)
         {
-            Logging.SaveLog(_tag, ex);
-            Error?.Invoke(this, new ErrorEventArgs(ex));
-            if (ex.InnerException != null)
-            {
-                Error?.Invoke(this, new ErrorEventArgs(ex.InnerException));
-            }
+            ReportStringDownloadError(ex);
         }
 
         try
@@ -239,12 +236,7 @@ public class DownloadService
         }
         catch (Exception ex)
         {
-            Logging.SaveLog(_tag, ex);
-            Error?.Invoke(this, new ErrorEventArgs(ex));
-            if (ex.InnerException != null)
-            {
-                Error?.Invoke(this, new ErrorEventArgs(ex.InnerException));
-            }
+            ReportStringDownloadError(ex);
         }
 
         return null;
@@ -257,21 +249,7 @@ public class DownloadService
     {
         try
         {
-            var handler = new SocketsHttpHandler
-            {
-                Proxy = webProxy,
-                UseProxy = webProxy != null,
-                AutomaticDecompression = DecompressionMethods.All,
-                ConnectTimeout = webProxy is null ? Global.DirectDownloadConnect : Global.ProxyDownloadConnect,
-            };
-            var certificateChainPolicy = CertPemManager.Instance.BuildCertificateChainPolicy();
-            if (certificateChainPolicy != null)
-            {
-                handler.SslOptions.CertificateChainPolicy = certificateChainPolicy;
-                handler.SslOptions.RemoteCertificateValidationCallback = null;
-            }
-
-            using var client = new HttpClient(HttpRequestHeadersHelper.CreateHandler(handler, RequestHeaders));
+            using var client = new HttpClient(HttpRequestHeadersHelper.CreateHandler(CreateStringHttpHandler(webProxy), RequestHeaders));
             client.Timeout = Timeout.InfiniteTimeSpan;
 
             if (userAgent.IsNullOrEmpty())
@@ -303,12 +281,7 @@ public class DownloadService
         }
         catch (Exception ex)
         {
-            Logging.SaveLog(_tag, ex);
-            Error?.Invoke(this, new ErrorEventArgs(ex));
-            if (ex.InnerException != null)
-            {
-                Error?.Invoke(this, new ErrorEventArgs(ex.InnerException));
-            }
+            ReportStringDownloadError(ex);
         }
 
         return null;
@@ -334,14 +307,60 @@ public class DownloadService
         }
         catch (Exception ex)
         {
-            Logging.SaveLog(_tag, ex);
-            Error?.Invoke(this, new ErrorEventArgs(ex));
-            if (ex.InnerException != null)
-            {
-                Error?.Invoke(this, new ErrorEventArgs(ex.InnerException));
-            }
+            ReportStringDownloadError(ex);
         }
         return null;
+    }
+
+    internal async Task<string> DownloadVaKoLinkSubscriptionAsync(Uri uri, bool blProxy, string userAgent)
+    {
+        var webProxy = await GetWebProxy(blProxy);
+        using var client = new HttpClient(CreateStringHttpHandler(webProxy, allowRedirects: false));
+        client.Timeout = Timeout.InfiniteTimeSpan;
+        client.DefaultRequestHeaders.UserAgent.TryParseAdd(userAgent.IsNullOrEmpty() ? Utils.GetVersion(false) : userAgent);
+        client.DefaultRequestHeaders.Accept.ParseAdd("*/*");
+        using var timeout = new CancellationTokenSource(webProxy is null ? Global.DirectFetch : Global.ProxyFetch);
+        return await VaKoLinkSubscription.DownloadAsync(client, uri, RequestHeaders ?? new Dictionary<string, string>(),
+            () => VaKoLinkSubscription.GetOrCreateDeviceId(Utils.GetConfigPath("vakolink-device-id")), timeout.Token);
+    }
+
+    private static SocketsHttpHandler CreateStringHttpHandler(IWebProxy? webProxy, bool allowRedirects = true)
+    {
+        var handler = new SocketsHttpHandler
+        {
+            AllowAutoRedirect = allowRedirects,
+            Proxy = webProxy,
+            UseProxy = webProxy != null,
+            AutomaticDecompression = DecompressionMethods.All,
+            ConnectTimeout = webProxy is null ? Global.DirectDownloadConnect : Global.ProxyDownloadConnect,
+        };
+        var certificateChainPolicy = CertPemManager.Instance.BuildCertificateChainPolicy();
+        if (certificateChainPolicy != null)
+        {
+            handler.SslOptions.CertificateChainPolicy = certificateChainPolicy;
+            handler.SslOptions.RemoteCertificateValidationCallback = null;
+        }
+        return handler;
+    }
+
+    private void ReportStringDownloadError(Exception ex)
+    {
+        if (RedactStringDownloadErrors)
+        {
+            var error = ex is HttpRequestException { StatusCode: { } status }
+                ? $"Не удалось получить подписку. HTTP {(int)status}."
+                : $"Не удалось получить подписку ({ex.GetType().Name}).";
+            Logging.SaveLog(error);
+            Error?.Invoke(this, new ErrorEventArgs(new IOException(error)));
+            return;
+        }
+
+        Logging.SaveLog(_tag, ex);
+        Error?.Invoke(this, new ErrorEventArgs(ex));
+        if (ex.InnerException != null)
+        {
+            Error?.Invoke(this, new ErrorEventArgs(ex.InnerException));
+        }
     }
 
     /// <summary>

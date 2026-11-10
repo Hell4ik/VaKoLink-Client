@@ -68,8 +68,8 @@
                                     Style="{StaticResource PultButton}" Content="Проверить обновления" />
                             <Button x:Name="clientUpdateAction" Margin="0,0,8,0" MinWidth="100"
                                     Style="{StaticResource PultButton}" Content="Установить" Visibility="Collapsed" />
-                            <Border Height="42" MinWidth="71" CornerRadius="10" Background="{DynamicResource PultControl}" BorderBrush="{DynamicResource PultControlOutline}" BorderThickness="1"><Menu VerticalAlignment="Center" HorizontalAlignment="Center" Background="Transparent">
-                                <MenuItem x:Name="mainMenu" Padding="14,8" Header="Меню" FlowDirection="RightToLeft">
+                            <Border Height="42" MinWidth="71" CornerRadius="10" Background="{DynamicResource PultControl}" BorderBrush="{DynamicResource PultControlOutline}" BorderThickness="1"><Menu HorizontalAlignment="Center" Background="Transparent">
+                                <MenuItem x:Name="mainMenu" Height="40" Padding="14,0" VerticalContentAlignment="Center" FontSize="14" Header="Меню" FlowDirection="RightToLeft">
                                     <MenuItem Header="Импорт" FlowDirection="LeftToRight">
                                         <MenuItem x:Name="menuAddServerViaClipboard" Header="Из буфера обмена" InputGestureText="Ctrl+V" />
                                         <MenuItem x:Name="menuAddServerViaScan" Header="QR с экрана" InputGestureText="Ctrl+S" />
