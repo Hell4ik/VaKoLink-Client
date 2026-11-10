@@ -382,7 +382,7 @@ public partial class MainWindow
             await Task.WhenAll(client, components);
 
             var results = await InstallPreparedComponentsAsync(connection) ?? await components;
-            ShowUpdateReport([$"VaKoLink — {await client}", .. results]);
+            ShowUpdateReport(await client, results, connection.NeedsDisconnect);
         }
         finally
         {
@@ -399,7 +399,7 @@ public partial class MainWindow
         {
             _componentUpdatePercent = 100;
             ShowUpdateCheckProgress("Компоненты проверены");
-            return PendingComponentReport(existing);
+            return existing.Preview;
         }
 
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(connection.ConnectedSessionToken);
@@ -426,7 +426,7 @@ public partial class MainWindow
             if (batch.HasChanges)
             {
                 _preparedUpdate = batch;
-                return PendingComponentReport(batch);
+                return batch.Preview;
             }
             using (batch)
             {
@@ -452,9 +452,6 @@ public partial class MainWindow
 
     private static IReadOnlyList<string> ComponentCheckError(string reason) =>
         [$"Xray — {reason}", $"mihomo — {reason}", $"sing-box — {reason}", $"geoFiles — {reason}"];
-
-    private static IReadOnlyList<string> PendingComponentReport(UpdateService.VaKoLinkUpdateBatch batch) =>
-        [.. batch.Preview, "", "Скачанные компоненты будут установлены после отключения VPN."];
 
     private async Task<IReadOnlyList<string>?> InstallPreparedComponentsAsync(VaKoLinkConnection connection)
     {
@@ -525,13 +522,20 @@ public partial class MainWindow
         updateStage.Text = stage;
     }
 
-    private void ShowUpdateReport(IReadOnlyList<string> results)
+    private void ShowUpdateReport(string clientStatus, IReadOnlyList<string> components, bool needsDisconnect)
     {
-        var report = string.Join(Environment.NewLine, results);
+        var notice = needsDisconnect && _preparedUpdate is { HasChanges: true }
+            ? "Скачанные компоненты установятся после отключения VPN."
+            : null;
+        var report = string.Join(Environment.NewLine, new[] { $"VaKoLink — {clientStatus}" }.Concat(components));
+        if (notice is not null)
+        {
+            report += $"{Environment.NewLine}{Environment.NewLine}{notice}";
+        }
         Logging.SaveLog(report);
         if (IsVisible)
         {
-            MessageBox.Show(this, report, "Обновления VaKoLink", MessageBoxButton.OK, MessageBoxImage.Information);
+            new UpdateReportWindow(clientStatus, components, notice) { Owner = this }.ShowDialog();
         }
         else
         {

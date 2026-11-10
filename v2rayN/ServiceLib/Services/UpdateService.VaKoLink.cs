@@ -229,7 +229,10 @@ public partial class UpdateService
             return;
         }
 
-        batch.Add($"{name} — скачано {tag}", async () =>
+        var downloaded = previous is null or "v0.0.0"
+            ? $"скачано · {tag}"
+            : $"скачано · {previous} → {tag}";
+        batch.Add($"{name} — {downloaded}", async () =>
         {
             Stream stream;
             try

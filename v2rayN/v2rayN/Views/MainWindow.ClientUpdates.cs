@@ -37,7 +37,7 @@ public partial class MainWindow
             var feed = new ClientUpdateFeed(() => CreateClientUpdateTransport(connection), ClientUpdateFeed.GitHubReleaseRoot);
             if (await feed.CheckAsync(installed, cancellation.Token) is not { } release)
             {
-                return $"v{InstalledClientVersion} — актуально.";
+                return $"Установлена актуальная версия v{InstalledClientVersion}.";
             }
 
             downloading = true;

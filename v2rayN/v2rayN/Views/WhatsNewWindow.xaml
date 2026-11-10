@@ -20,7 +20,8 @@
                 Style="{StaticResource PultButton}" IsDefault="True" Content="Понятно" Click="Dismiss_Click" />
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel>
-                <TextBlock TextWrapping="Wrap"><Run FontWeight="SemiBold">1. Обновлено скачивание новой версии.</Run> VaKoLink загружает большие пакеты параллельными частями, если сервер это поддерживает. Прогресс пакета виден отдельно, а скачивание может продолжаться дольше 15 минут.</TextBlock>
+                <TextBlock Margin="0,0,0,12" TextWrapping="Wrap"><Run FontWeight="SemiBold">1. Обновлено окно результатов.</Run> Статус VaKoLink и результаты по компонентам показаны отдельно в оформлении приложения.</TextBlock>
+                <TextBlock TextWrapping="Wrap"><Run FontWeight="SemiBold">2. Показаны версии скачанных компонентов.</Run> В окне виден переход от установленной версии к новой. Подсказка об отключении VPN появляется, когда компоненты ждут установки.</TextBlock>
             </StackPanel>
         </ScrollViewer>
     </DockPanel>
