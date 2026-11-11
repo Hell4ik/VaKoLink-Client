@@ -72,10 +72,19 @@ public partial class MainWindow
             advancedPage.Visibility = Visibility.Collapsed;
             connectionPage.Visibility = Visibility.Visible;
         };
-        nodeList.SelectionChanged += (_, _) => UpdateNodeControls();
+        nodeList.SelectionChanged += async (_, _) =>
+        {
+            UpdateNodeControls();
+            await RefreshConfigurationSummaryAsync();
+        };
+        Loaded += async (_, _) => await RefreshConfigurationSummaryAsync();
 
         this.WhenActivated(disposables =>
         {
+            AppEvents.VaKoLinkConfigurationUsageChanged.AsObservable()
+                .ObserveOn(RxSchedulers.MainThreadScheduler)
+                .SubscribeAsync(async _ => await RefreshConfigurationSummaryAsync())
+                .DisposeWith(disposables);
             this.BindCommand(ViewModel, vm => vm.AddServerViaClipboardCmd, v => v.menuAddServerViaClipboard).DisposeWith(disposables);
             this.BindCommand(ViewModel, vm => vm.AddServerViaScanCmd, v => v.menuAddServerViaScan).DisposeWith(disposables);
             this.BindCommand(ViewModel, vm => vm.AddServerViaImageCmd, v => v.menuAddServerViaImage).DisposeWith(disposables);
@@ -213,6 +222,7 @@ public partial class MainWindow
         connection.Changed += () => Dispatcher.InvokeAsync(async () =>
         {
             RenderConnection();
+            await RefreshConfigurationSummaryAsync();
             await TryInstallPreparedUpdateAsync(connection);
         });
         transport.Changed += () => Dispatcher.InvokeAsync(RenderTransport);

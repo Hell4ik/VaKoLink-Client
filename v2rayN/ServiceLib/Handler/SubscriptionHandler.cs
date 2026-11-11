@@ -120,12 +120,12 @@ public static class SubscriptionHandler
     }
 
     private static async Task<string> DownloadSubscriptionContent(DownloadService downloadHandle, string url, bool blProxy,
-        string userAgent, bool allowDeviceApproval = true)
+        string userAgent, bool allowDeviceApproval = true, Action<VaKoLinkConfigurationUsage>? receiveUsage = null)
     {
         if (IsVaKoLinkWindows && allowDeviceApproval && Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
             VaKoLinkSubscription.IsPortalSubscription(uri))
         {
-            return await downloadHandle.DownloadVaKoLinkSubscriptionAsync(uri, blProxy, userAgent);
+            return await downloadHandle.DownloadVaKoLinkSubscriptionAsync(uri, blProxy, userAgent, receiveUsage);
         }
 
         var result = await downloadHandle.TryDownloadString(url, blProxy, userAgent);
@@ -179,8 +179,17 @@ public static class SubscriptionHandler
         }
 
         // Download and return result directly
-        return await DownloadSubscriptionContent(downloadHandle, url, blProxy, item.UserAgent,
-            allowDeviceApproval: item.ConvertTarget.IsNullOrEmpty());
+        VaKoLinkConfigurationUsage? usage = null;
+        var result = await DownloadSubscriptionContent(downloadHandle, url, blProxy, item.UserAgent,
+            allowDeviceApproval: item.ConvertTarget.IsNullOrEmpty(), receiveUsage: value => usage = value);
+        if (usage is not null)
+        {
+            await SQLiteHelper.Instance.ExecuteAsync(
+                "UPDATE SubItem SET VaKoLinkExpiresAt = ?, VaKoLinkUsedBytes = ?, VaKoLinkTotalBytes = ? WHERE Id = ? AND Url = ?",
+                usage.ExpiresAt, usage.UsedBytes, usage.TotalBytes, item.Id, item.Url);
+            AppEvents.VaKoLinkConfigurationUsageChanged.Publish(item.Id);
+        }
+        return result;
     }
 
     private static async Task<string> DownloadAdditionalSubscriptions(SubItem item, string mainResult, bool blProxy, DownloadService downloadHandle)

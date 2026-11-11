@@ -312,7 +312,8 @@ public class DownloadService
         return null;
     }
 
-    internal async Task<string> DownloadVaKoLinkSubscriptionAsync(Uri uri, bool blProxy, string userAgent)
+    internal async Task<string> DownloadVaKoLinkSubscriptionAsync(Uri uri, bool blProxy, string userAgent,
+        Action<VaKoLinkConfigurationUsage>? receiveUsage = null)
     {
         var webProxy = await GetWebProxy(blProxy);
         using var client = new HttpClient(CreateStringHttpHandler(webProxy, allowRedirects: false));
@@ -321,7 +322,7 @@ public class DownloadService
         client.DefaultRequestHeaders.Accept.ParseAdd("*/*");
         using var timeout = new CancellationTokenSource(webProxy is null ? Global.DirectFetch : Global.ProxyFetch);
         return await VaKoLinkSubscription.DownloadAsync(client, uri, RequestHeaders ?? new Dictionary<string, string>(),
-            () => VaKoLinkSubscription.GetOrCreateDeviceId(Utils.GetConfigPath("vakolink-device-id")), timeout.Token);
+            () => VaKoLinkSubscription.GetOrCreateDeviceId(Utils.GetConfigPath("vakolink-device-id")), timeout.Token, receiveUsage);
     }
 
     private static SocketsHttpHandler CreateStringHttpHandler(IWebProxy? webProxy, bool allowRedirects = true)

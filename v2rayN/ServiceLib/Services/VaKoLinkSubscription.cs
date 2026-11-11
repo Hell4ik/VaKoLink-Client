@@ -17,7 +17,7 @@ internal static class VaKoLinkSubscription
         uri.AbsolutePath.StartsWith("/s/", StringComparison.Ordinal) && uri.AbsolutePath.Length > 3;
 
     internal static async Task<string> DownloadAsync(HttpClient client, Uri uri, IReadOnlyDictionary<string, string> headers,
-        Func<string> getDeviceId, CancellationToken cancellationToken)
+        Func<string> getDeviceId, CancellationToken cancellationToken, Action<VaKoLinkConfigurationUsage>? receiveUsage = null)
     {
         var manual = headers.GetValueOrDefault(HwidHeader);
         var hwid = string.IsNullOrWhiteSpace(manual) ? null : manual;
@@ -31,7 +31,13 @@ internal static class VaKoLinkSubscription
             {
                 if (response.IsSuccessStatusCode)
                 {
-                    return await response.Content.ReadAsStringAsync(cancellationToken);
+                    var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                    if (trusted && receiveUsage is not null)
+                    {
+                        receiveUsage(VaKoLinkConfigurationUsage.Parse(
+                            response.Headers.TryGetValues("Subscription-Userinfo", out var values) ? values : []));
+                    }
+                    return content;
                 }
 
                 if (trusted && response.StatusCode == HttpStatusCode.Forbidden &&

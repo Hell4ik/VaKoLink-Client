@@ -102,7 +102,13 @@
                                 </MenuItem>
                             </Menu></Border>
                         </StackPanel>
-                        <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource PultMuted}" Text="ПОДКЛЮЧЕНИЕ" />
+                        <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                            <TextBlock x:Name="configurationStatus" FontWeight="SemiBold" TextWrapping="Wrap" Text="Статус конфигурации недоступен" />
+                            <TextBlock x:Name="configurationExpiry" Margin="0,2,0,0" Foreground="{DynamicResource PultMuted}"
+                                       TextWrapping="Wrap" Text="Срок конфигурации недоступен" />
+                            <TextBlock x:Name="configurationTraffic" Margin="0,2,0,0" Foreground="{DynamicResource PultMuted}"
+                                       TextWrapping="Wrap" Text="Данные о трафике конфигурации недоступны" />
+                        </StackPanel>
                     </DockPanel>
                 </Border>
 

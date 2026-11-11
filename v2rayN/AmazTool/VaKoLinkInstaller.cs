@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using VaKoLink.Updates;
@@ -23,7 +24,8 @@ internal static class VaKoLinkInstaller
             !int.TryParse(args[1], NumberStyles.None, CultureInfo.InvariantCulture, out var parentId) || parentId <= 0 ||
             !long.TryParse(args[2], NumberStyles.None, CultureInfo.InvariantCulture, out var parentStarted) || parentStarted <= 0)
         {
-            throw new InvalidDataException("Неверные параметры установки VaKoLink.");
+            return RecordFailure(work, "проверка параметров установщика",
+                new InvalidDataException("Неверные параметры установки VaKoLink."));
         }
 
         var executable = UpdatePackage.SafePath(root, UpdatePackage.ClientName);
@@ -31,10 +33,14 @@ internal static class VaKoLinkInstaller
         string report;
         bool restart;
         int exitCode;
-        using (await WaitForLockAsync(work))
+        var stage = "захват блокировки";
+        try
         {
+            using var updateLock = await WaitForLockAsync(work);
             // Never touch the package or the installation if the running client failed to exit.
+            stage = "ожидание завершения VaKoLink";
             await WaitForClientAsync(executable, parentId, parentStarted);
+            stage = recovering ? "восстановление предыдущей версии" : "установка пакета";
             try
             {
                 if (recovering)
@@ -63,9 +69,9 @@ internal static class VaKoLinkInstaller
             {
                 Console.Error.WriteLine(ex);
                 restart = !File.Exists(pending);
-                report = restart
-                    ? "Обновление не установлено. Прежняя версия сохранена."
-                    : $"Не удалось восстановить VaKoLink. Резервная копия: {Path.Combine(transaction, "backup")}. {ex.Message}";
+                report = Failure(stage, ex) + (restart
+                    ? " Прежняя версия сохранена."
+                    : $" Резервная копия: {Path.Combine(transaction, "backup")}.");
                 exitCode = 1;
             }
 
@@ -82,23 +88,60 @@ internal static class VaKoLinkInstaller
                 Console.Error.WriteLine(ex.Message);
             }
         }
+        catch (Exception ex)
+        {
+            return RecordFailure(work, stage, ex);
+        }
 
         Console.WriteLine(report);
         if (restart)
         {
-            var start = new ProcessStartInfo(executable)
+            try
             {
-                WorkingDirectory = root,
-                UseShellExecute = false
-            };
-            if (File.Exists(UpdatePackage.SafePath(transaction, UpdatePackage.ResumeName)))
-            {
-                start.ArgumentList.Add(UpdatePackage.ResumeCommand);
-                start.ArgumentList.Add(id);
+                var start = new ProcessStartInfo(executable)
+                {
+                    WorkingDirectory = root,
+                    UseShellExecute = false
+                };
+                if (File.Exists(UpdatePackage.SafePath(transaction, UpdatePackage.ResumeName)))
+                {
+                    start.ArgumentList.Add(UpdatePackage.ResumeCommand);
+                    start.ArgumentList.Add(id);
+                }
+                using var client = Process.Start(start) ?? throw new InvalidOperationException("Процесс VaKoLink не запустился.");
             }
-            using var client = Process.Start(start);
+            catch (Exception ex)
+            {
+                return RecordFailure(work, "перезапуск VaKoLink", ex, report);
+            }
         }
         return exitCode;
+    }
+
+    private static string Failure(string stage, Exception error)
+    {
+        var code = error is Win32Exception native ? native.NativeErrorCode.ToString(CultureInfo.InvariantCulture)
+            : $"0x{error.HResult:X8}";
+        return $"Ошибка обновления на этапе «{stage}» (код {code}). {error.Message}";
+    }
+
+    private static int RecordFailure(string work, string stage, Exception error, string? precedingResult = null)
+    {
+        var report = Failure(stage, error);
+        if (precedingResult is not null)
+        {
+            report += $" {precedingResult}";
+        }
+        Console.Error.WriteLine(report);
+        try
+        {
+            UpdatePackage.WriteMarker(work, UpdatePackage.ResultName, report);
+        }
+        catch (Exception writeError) when (writeError is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine(Failure("сохранение результата обновления", writeError));
+        }
+        return 1;
     }
 
     internal static async Task InstallAsync(string root, string work, string transaction, Version version, string sha256)
@@ -219,16 +262,38 @@ internal static class VaKoLinkInstaller
         }
         using (parent)
         {
-            if (parent.HasExited || parent.StartTime.ToUniversalTime().Ticks != parentStarted)
+            try
+            {
+                if (parent.HasExited || parent.StartTime.ToUniversalTime().Ticks != parentStarted)
+                {
+                    return;
+                }
+                if (!string.Equals(parent.MainModule?.FileName, executable, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (parent.HasExited)
+                    {
+                        return;
+                    }
+                    throw new InvalidOperationException("Исполняемый файл закрываемого клиента не совпадает с VaKoLink.exe.");
+                }
+            }
+            catch (Exception ex) when ((ex is Win32Exception { NativeErrorCode: 299 } or InvalidOperationException) && parent.HasExited)
             {
                 return;
             }
-            if (!string.Equals(parent.MainModule?.FileName, executable, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException("Исполняемый файл закрываемого клиента не совпадает с VaKoLink.exe.");
-            }
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(90));
-            await parent.WaitForExitAsync(timeout.Token);
+            try
+            {
+                await parent.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException ex) when (timeout.IsCancellationRequested && !parent.HasExited)
+            {
+                throw new TimeoutException("VaKoLink не завершился в течение 90 секунд.", ex);
+            }
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested && parent.HasExited)
+            {
+                // The process exited concurrently with the timeout.
+            }
         }
     }
 }

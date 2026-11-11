@@ -37,4 +37,8 @@ public class SubItem
     public string? Memo { get; set; }
 
     public ECoreType? CustomCoreType { get; set; }
+
+    public long? VaKoLinkExpiresAt { get; set; }
+    public long? VaKoLinkUsedBytes { get; set; }
+    public long? VaKoLinkTotalBytes { get; set; }
 }

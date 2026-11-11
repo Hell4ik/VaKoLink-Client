@@ -63,9 +63,9 @@ public sealed class SQLiteHelper
         return await _dbAsync.DeleteAllAsync<T>();
     }
 
-    public async Task<int> ExecuteAsync(string sql)
+    public async Task<int> ExecuteAsync(string sql, params object?[] args)
     {
-        return await _dbAsync.ExecuteAsync(sql);
+        return await _dbAsync.ExecuteAsync(sql, args);
     }
 
     public async Task<List<T>> QueryAsync<T>(string sql) where T : new()

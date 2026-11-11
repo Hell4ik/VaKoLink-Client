@@ -92,14 +92,21 @@ internal static class UpdatePackage
     internal static void WriteMarker(string root, string name, string value)
     {
         var target = SafePath(root, name);
-        var temp = SafePath(root, name + ".tmp");
-        using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+        var temp = SafePath(root, $"{name}.{Guid.NewGuid():N}.tmp");
+        try
         {
-            var bytes = System.Text.Encoding.UTF8.GetBytes(value);
-            stream.Write(bytes);
-            stream.Flush(flushToDisk: true);
+            using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                var bytes = System.Text.Encoding.UTF8.GetBytes(value);
+                stream.Write(bytes);
+                stream.Flush(flushToDisk: true);
+            }
+            File.Move(temp, target, overwrite: true);
         }
-        File.Move(temp, target, overwrite: true);
+        finally
+        {
+            File.Delete(temp);
+        }
     }
 
     internal static async Task<bool> VerifyAsync(Stream archive, string sha256, CancellationToken token = default)

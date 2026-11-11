@@ -4,6 +4,7 @@ public static class AppEvents
 {
     public static readonly EventChannel<RxVoid> AddServerViaClipboardRequested = new();
     public static readonly EventChannel<bool> HasUpdateNotified = new();
+    public static readonly EventChannel<string> VaKoLinkConfigurationUsageChanged = new();
 
     public static readonly EventChannel<ServerSpeedItem> DispatcherStatisticsRequested = new();
 
