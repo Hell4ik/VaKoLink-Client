@@ -32,10 +32,10 @@ internal static class VaKoLinkSubscription
                 if (response.IsSuccessStatusCode)
                 {
                     var content = await response.Content.ReadAsStringAsync(cancellationToken);
-                    if (trusted && receiveUsage is not null)
+                    if (receiveUsage is not null)
                     {
                         receiveUsage(VaKoLinkConfigurationUsage.Parse(
-                            response.Headers.TryGetValues("Subscription-Userinfo", out var values) ? values : []));
+                            trusted && response.Headers.TryGetValues("Subscription-Userinfo", out var values) ? values : []));
                     }
                     return content;
                 }

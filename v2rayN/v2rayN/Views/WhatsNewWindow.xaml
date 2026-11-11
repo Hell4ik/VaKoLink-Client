@@ -20,8 +20,8 @@
                 Style="{StaticResource PultButton}" IsDefault="True" Content="Понятно" Click="Dismiss_Click" />
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel>
-                <TextBlock Margin="0,0,0,12" TextWrapping="Wrap"><Run FontWeight="SemiBold">Добавлено.</Run> В верхней панели показаны срок действия и общий трафик конфигурации.</TextBlock>
-                <TextBlock TextWrapping="Wrap"><Run FontWeight="SemiBold">Исправлено.</Run> Устранён сбой при закрытии старого клиента во время установки. При следующем запуске VaKoLink показывает причину ошибки установки.</TextBlock>
+                <TextBlock Margin="0,0,0,12" TextWrapping="Wrap">Дата окончания конфигурации и оставшиеся дни отображаются по времени Екатеринбурга, как в личном кабинете.</TextBlock>
+                <TextBlock TextWrapping="Wrap">Общий трафик и лимит берутся из ответа портала. Для тарифа без ограничения показывается «без лимита», для отсутствующих значений — «Нет данных».</TextBlock>
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

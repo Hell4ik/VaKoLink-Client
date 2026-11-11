@@ -103,11 +103,11 @@
                             </Menu></Border>
                         </StackPanel>
                         <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
-                            <TextBlock x:Name="configurationStatus" FontWeight="SemiBold" TextWrapping="Wrap" Text="Статус конфигурации недоступен" />
+                            <TextBlock x:Name="configurationStatus" FontWeight="SemiBold" TextWrapping="Wrap" Text="Статус конфигурации — Нет данных" />
                             <TextBlock x:Name="configurationExpiry" Margin="0,2,0,0" Foreground="{DynamicResource PultMuted}"
-                                       TextWrapping="Wrap" Text="Срок конфигурации недоступен" />
+                                       TextWrapping="Wrap" Text="Срок конфигурации — Нет данных" />
                             <TextBlock x:Name="configurationTraffic" Margin="0,2,0,0" Foreground="{DynamicResource PultMuted}"
-                                       TextWrapping="Wrap" Text="Данные о трафике конфигурации недоступны" />
+                                       TextWrapping="Wrap" Text="Общий трафик конфигурации — Нет данных" />
                         </StackPanel>
                     </DockPanel>
                 </Border>
