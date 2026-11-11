@@ -20,6 +20,7 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare)
     public bool IsRunning { get; private set; }
     public bool NeedsStop => _session is not null;
     public bool CleanupPending { get; private set; }
+    public string? DiagnosticFailure { get; private set; }
     public string Status { get; private set; } = "Transport остановлен";
 
     public Task ToggleAsync() => RunAsync(async () =>
@@ -78,11 +79,13 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare)
         try
         {
             Busy = true;
+            DiagnosticFailure = null;
             Changed?.Invoke();
             await transition();
         }
         catch (Exception ex)
         {
+            DiagnosticFailure = $"Сбой Transport · 0x{ex.HResult:X8}";
             Status = $"Ошибка Transport. {ex.Message}";
             if (propagate)
             {
@@ -145,6 +148,7 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare)
                         IsRunning = false;
                         Busy = true;
                         await StopSessionAsync();
+                        DiagnosticFailure = "Сессия Transport завершилась";
                         Status = $"Ошибка Transport. {state.Failure ?? "Сессия завершилась неожиданно."}";
                         return;
                     }
@@ -153,6 +157,7 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare)
                 {
                     notify = true;
                     IsRunning = false;
+                    DiagnosticFailure = $"Проверка Transport · 0x{ex.HResult:X8}";
                     Status = $"Ошибка Transport. {ex.Message}";
                     return;
                 }

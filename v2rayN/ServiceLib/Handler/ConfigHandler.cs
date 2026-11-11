@@ -2237,6 +2237,7 @@ public static class ConfigHandler
             if (item.Url != subItem.Url || item.ConvertTarget != subItem.ConvertTarget)
             {
                 item.VaKoLinkExpiresAt = item.VaKoLinkUsedBytes = item.VaKoLinkTotalBytes = null;
+                item.VaKoLinkTrafficCheckedAt = item.VaKoLinkExpiryCheckedAt = null;
             }
             item.Remarks = subItem.Remarks;
             item.Url = subItem.Url;

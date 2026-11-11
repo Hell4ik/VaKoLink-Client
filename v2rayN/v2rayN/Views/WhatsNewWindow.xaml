@@ -5,7 +5,7 @@
     Background="{DynamicResource PultCard}"
     Foreground="{DynamicResource PultText}"
     Width="540"
-    MaxHeight="500"
+    MaxHeight="620"
     SizeToContent="Height"
     ResizeMode="NoResize"
     ShowInTaskbar="False"
@@ -18,11 +18,23 @@
         <TextBlock x:Name="heading" DockPanel.Dock="Top" Margin="0,0,0,16" FontSize="21" FontWeight="SemiBold" TextWrapping="Wrap" />
         <Button DockPanel.Dock="Bottom" Margin="0,16,0,0" HorizontalAlignment="Right" MinWidth="104"
                 Style="{StaticResource PultButton}" IsDefault="True" Content="Понятно" Click="Dismiss_Click" />
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-            <StackPanel>
-                <TextBlock Margin="0,0,0,12" TextWrapping="Wrap">Дата окончания конфигурации и оставшиеся дни отображаются по времени Екатеринбурга, как в личном кабинете.</TextBlock>
-                <TextBlock TextWrapping="Wrap">Общий трафик и лимит берутся из ответа портала. Для тарифа без ограничения показывается «без лимита», для отсутствующих значений — «Нет данных».</TextBlock>
-            </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl x:Name="releases">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,0,10,13">
+                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding Title}" />
+                            <ItemsControl Margin="0,4,0,0" ItemsSource="{Binding Changes}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Margin="0,0,0,4" Text="{Binding}" TextWrapping="Wrap" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </ScrollViewer>
     </DockPanel>
 </Window>

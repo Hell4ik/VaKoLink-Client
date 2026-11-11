@@ -7,9 +7,9 @@
     xmlns:vms="clr-namespace:ServiceLib.ViewModels;assembly=ServiceLib"
     Title="VaKoLink"
     Width="860"
-    Height="550"
+    Height="610"
     MinWidth="680"
-    MinHeight="510"
+    MinHeight="550"
     x:TypeArguments="vms:MainWindowViewModel"
     Icon="/Resources/VaKoLink.ico"
     Style="{StaticResource WindowGlobal}"
@@ -96,6 +96,7 @@
                                         </MenuItem>
                                     </MenuItem>
                                     <MenuItem Header="Справка" FlowDirection="LeftToRight">
+                                        <MenuItem x:Name="menuDiagnostics" Header="Диагностика" />
                                         <MenuItem x:Name="menuLog" Header="Журнал" />
                                         <MenuItem x:Name="menuAbout" Header="О программе" />
                                     </MenuItem>
@@ -106,8 +107,6 @@
                             <TextBlock x:Name="configurationStatus" FontWeight="SemiBold" TextWrapping="Wrap" Text="Статус конфигурации — Нет данных" />
                             <TextBlock x:Name="configurationExpiry" Margin="0,2,0,0" Foreground="{DynamicResource PultMuted}"
                                        TextWrapping="Wrap" Text="Срок конфигурации — Нет данных" />
-                            <TextBlock x:Name="configurationTraffic" Margin="0,2,0,0" Foreground="{DynamicResource PultMuted}"
-                                       TextWrapping="Wrap" Text="Общий трафик конфигурации — Нет данных" />
                         </StackPanel>
                     </DockPanel>
                 </Border>
@@ -152,6 +151,30 @@
 
                         <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel>
+                            <Border Margin="0,0,0,11" Padding="15,11,15,13" Style="{StaticResource PultCardStyle}">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right" Margin="12,0,0,0">
+                                            <Button x:Name="refreshTrafficButton" HorizontalAlignment="Right" MinWidth="116" Height="32"
+                                                    Padding="7,0" FontSize="12" Style="{StaticResource PultButton}" Content="Обновить расход" />
+                                            <TextBlock x:Name="trafficFreshness" HorizontalAlignment="Right" Margin="0,4,0,0"
+                                                       Foreground="{DynamicResource PultMuted}" FontSize="11"
+                                                       MaxWidth="155" TextAlignment="Right" TextWrapping="Wrap"
+                                                       AutomationProperties.LiveSetting="Polite" />
+                                        </StackPanel>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock FontSize="13" FontWeight="SemiBold" Text="Расход трафика" />
+                                            <TextBlock Margin="0,2,0,0" TextWrapping="Wrap">
+                                                <Run x:Name="trafficUsed" FontSize="20" FontWeight="SemiBold" Text="Нет данных" />
+                                                <Run x:Name="trafficLimit" Foreground="{DynamicResource PultMuted}" />
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </DockPanel>
+                                    <ProgressBar x:Name="trafficMeter" Margin="0,8,0,0" Height="4" Maximum="100"
+                                                 Foreground="{DynamicResource PultAccent}" Background="{DynamicResource PultControl}"
+                                                 AutomationProperties.Name="Доля использованного трафика" Visibility="Collapsed" />
+                                </StackPanel>
+                            </Border>
                             <Border x:Name="connectionCard" Padding="19,18,19,19" Style="{StaticResource PultCardStyle}">
                                 <StackPanel>
                                     <DockPanel Margin="0,0,0,17">
@@ -173,6 +196,8 @@
                                     <Button x:Name="connectionButton" Margin="0,14,0,0" Height="48" FontWeight="SemiBold"
                                             Background="#0977A9" BorderBrush="#29B8F4" Foreground="White"
                                             Style="{StaticResource PultButton}" Content="Подключить" />
+                                    <TextBlock x:Name="connectionNotice" Margin="0,9,0,0" Visibility="Collapsed" TextWrapping="Wrap"
+                                               FontSize="12" Foreground="{DynamicResource PultMedium}" AutomationProperties.LiveSetting="Polite" />
                                 </StackPanel>
                             </Border>
 

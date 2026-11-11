@@ -1,13 +1,52 @@
+using VaKoLink.Updates;
+
 namespace v2rayN.Views;
 
 public partial class WhatsNewWindow
 {
-    public WhatsNewWindow(string installedVersion)
+    public WhatsNewWindow(string installedVersion, Version? previousVersion)
     {
         InitializeComponent();
         Title = heading.Text = $"Что нового в VaKoLink v{installedVersion}";
+        if (UpdatePackage.TryParseVersion(installedVersion, out var current))
+        {
+            releases.ItemsSource = History.Where(entry => entry.Version <= current &&
+                (previousVersion is null ? entry.Version == current : entry.Version > previousVersion));
+        }
         SourceInitialized += (_, _) => WindowsUtils.SetDarkBorder(this, AppManager.Instance.Config.UiItem.CurrentTheme);
     }
 
     private void Dismiss_Click(object sender, RoutedEventArgs e) => Close();
+
+    private sealed record ReleaseNote(int Minor, params string[] Changes)
+    {
+        public Version Version => new(1, Minor, 0, 0);
+        public string Title => $"v1.{Minor}";
+    }
+
+    private static readonly ReleaseNote[] History =
+    [
+        new(16, "Обновление VaKoLink из приложения с проверкой целостности пакета.",
+            "Установщик сохраняет подписки, ноды и настройки и восстанавливает предыдущую версию при сбое."),
+        new(17, "VaKoLink показывает версию и архитектуру в заголовке.",
+            "Одна кнопка проверяет клиент и компоненты. Новая версия скачивается автоматически.",
+            "При установке клиент сам отключает VPN и Transport и перезапускается.",
+            "После обновления клиент восстанавливает VPN в прежнем режиме. Transport запускается вручную.",
+            "После успешной установки открывается окно «Что нового»."),
+        new(18, "Подписки с одобрением автоматически регистрируют устройство Windows.",
+            "Надпись «Меню» выровнена по центру кнопки."),
+        new(19, "Пакет обновления скачивается параллельными частями, если сервер это поддерживает.",
+            "Процент скачивания клиента показан отдельно. Убрано прерывание по истечении 15 минут."),
+        new(20, "Результаты обновления приложения и компонентов показаны отдельно в окне VaKoLink.",
+            "Для скачанных компонентов виден переход между версиями. Подсказка появляется, когда компоненты ждут установки."),
+        new(21, "В верхней панели появились срок и общий трафик конфигурации.",
+            "Исправлен сбой, если старый клиент закрывался во время проверки процесса. При ошибке видны этап и код."),
+        new(22, "Срок и оставшиеся дни рассчитываются по времени Екатеринбурга.",
+            "В расходе отображаются данные портала, в том числе тариф без лимита и отсутствующие значения."),
+        new(23, "Расход трафика вынесен над подключением. Его можно обновить отдельно. Срок автоматически проверяется в полночь по Екатеринбургу.",
+            "При смене ноды виден переход, а при возврате к прежней ноде появляется сообщение.",
+            "В «Справке» появилась диагностика с копированием отчёта.",
+            "После обновления окно «Что нового» показывает изменения всех пропущенных версий.",
+            "Исправлено чтение срока и расхода по старым ссылкам VaKoLink.")
+    ];
 }

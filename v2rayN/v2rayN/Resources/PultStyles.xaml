@@ -114,7 +114,7 @@
             </Border>
             <DockPanel Grid.Column="1" Margin="8,0,6,0">
                 <TextBlock DockPanel.Dock="Right" Margin="6,0,0,0" VerticalAlignment="Center" Text="✓" FontWeight="SemiBold"
-                           Foreground="{DynamicResource PultGood}" AutomationProperties.Name="Подключено">
+                           Foreground="{DynamicResource PultGood}" AutomationProperties.Name="Последняя подтверждённая нода">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
                             <Setter Property="Visibility" Value="Collapsed" />
@@ -123,7 +123,26 @@
                                     <DataTrigger.Binding>
                                         <MultiBinding Converter="{StaticResource PultActiveNode}">
                                             <Binding Path="IndexId" />
-                                            <Binding Path="Tag" RelativeSource="{RelativeSource AncestorType=ListBox}" />
+                                            <Binding Path="Tag.Item1" RelativeSource="{RelativeSource AncestorType=ListBox}" />
+                                        </MultiBinding>
+                                    </DataTrigger.Binding>
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <TextBlock DockPanel.Dock="Right" Margin="6,0,0,0" VerticalAlignment="Center" Text="◌"
+                           Foreground="{DynamicResource PultAccent}" ToolTip="Подключение…" AutomationProperties.Name="Подключение">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Value="True">
+                                    <DataTrigger.Binding>
+                                        <MultiBinding Converter="{StaticResource PultActiveNode}">
+                                            <Binding Path="IndexId" />
+                                            <Binding Path="Tag.Item2" RelativeSource="{RelativeSource AncestorType=ListBox}" />
                                         </MultiBinding>
                                     </DataTrigger.Binding>
                                     <Setter Property="Visibility" Value="Visible" />

@@ -14,12 +14,18 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
     private ProfileItem? _connectedProfile;
     private bool _restartingTransport;
     private CancellationTokenSource? _monitor;
+    private string _diagnosticStage = "Подключение";
 
     public event Action? Changed;
     public bool Ready { get; private set; }
     public bool Busy { get; private set; }
     public bool IsConnecting { get; private set; }
     public bool IsSwitchingNode { get; private set; }
+    public string? SwitchingFromNodeId { get; private set; }
+    public string? SwitchingToNodeId { get; private set; }
+    public string? SwitchNotice { get; private set; }
+    public string? DiagnosticFailure { get; private set; }
+    public bool IsCoreRunning => _ownsCore && CoreManager.Instance.IsConnectionRunning(_requiresPreCore);
     public bool UseTun => config.VaKoLinkUseTun;
     public bool IsConnected => _connected;
     public string? ConnectedNodeId => _connectedProfile?.IndexId;
@@ -149,10 +155,12 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
 
     private async Task ReplaceConnectionAsync(ProfileItem target, ProfileItem previous)
     {
+        SwitchingFromNodeId = previous.IndexId;
+        SwitchingToNodeId = target.IndexId;
         IsSwitchingNode = true;
         Changed?.Invoke();
         var restartTransport = !UseTun && IsTransportRunning?.Invoke() == true;
-        string? recoveredFrom = null;
+        string? switchFailure = null;
         try
         {
             await StopAsync();
@@ -161,16 +169,17 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
         catch (Exception ex)
         {
             Logging.SaveLog(nameof(VaKoLinkConnection), ex);
+            switchFailure = $"{_diagnosticStage} · 0x{ex.HResult:X8}";
             if (IsConnected)
             {
-                Status = $"Не удалось переключить ноду. {ex.Message}";
+                SwitchNotice = "Не удалось переключить ноду. Прежнее подключение активно.";
+                DiagnosticFailure = switchFailure;
                 return;
             }
             try
             {
                 await StopAsync();
                 await StartAsync(previous);
-                recoveredFrom = ex.Message;
             }
             catch (Exception rollback)
             {
@@ -179,9 +188,11 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
             }
         }
 
-        if (recoveredFrom is not null)
+        if (switchFailure is not null)
         {
-            Status = $"Прежняя нода восстановлена. Новая нода не подключилась. {recoveredFrom}";
+            Status = "Подключено";
+            SwitchNotice = $"Не удалось подключиться к ноде «{target.Remarks}». Восстановлена «{previous.Remarks}».";
+            DiagnosticFailure = switchFailure;
         }
         IsSwitchingNode = false;
         Changed?.Invoke();
@@ -304,12 +315,15 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
                 return;
             }
             Busy = true;
+            SwitchNotice = null;
+            DiagnosticFailure = null;
             Changed?.Invoke();
             await action();
         }
         catch (Exception ex)
         {
             Logging.SaveLog(nameof(VaKoLinkConnection), ex);
+            DiagnosticFailure = $"{_diagnosticStage} · 0x{ex.HResult:X8}";
             try
             {
                 await StopAsync();
@@ -329,6 +343,8 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
         {
             IsConnecting = false;
             IsSwitchingNode = false;
+            SwitchingFromNodeId = null;
+            SwitchingToNodeId = null;
             Busy = false;
             _transition.Release();
             Changed?.Invoke();
@@ -337,6 +353,7 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
 
     private async Task StartAsync(ProfileItem? profile = null)
     {
+        _diagnosticStage = "Подготовка подключения";
         IsConnecting = true;
         Status = "Подключение…";
         Changed?.Invoke();
@@ -385,6 +402,7 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
         _ownsCore = true;
         _ownsTun = useTun;
         var core = CoreManager.Instance;
+        _diagnosticStage = "Запуск ядра";
         await core.LoadCore(main, pre, checkedLaunch: true);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
         try
@@ -404,6 +422,7 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
         }
 
         // The shipped routing presets send this public HTTPS endpoint through the selected outbound.
+        _diagnosticStage = "Проверка связи с нодой";
         var webProxy = new WebProxy($"socks5://{Global.Loopback}:{port}");
         var responseTime = await ConnectionHandler.GetRealPingTime(webProxy, Global.SpeedPingTestUrls[0],
             CancellationToken.None, requireSuccess: true);
@@ -417,6 +436,7 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
         }
         if (!useTun)
         {
+            _diagnosticStage = "Настройка системного прокси";
             _proxy = new();
             _proxy.Enable(config, port);
         }
@@ -444,6 +464,7 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
 
     private async Task StopAsync()
     {
+        _diagnosticStage = "Остановка подключения";
         if (_ownsCore && BeforeCoreStop is not null)
         {
             await BeforeCoreStop();

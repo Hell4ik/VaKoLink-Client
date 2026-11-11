@@ -24,6 +24,7 @@ public partial class MainWindow
     private CancellationTokenSource? _latencyCancellation;
     private CancellationTokenSource? _updateCancellation;
     private UpdateService.VaKoLinkUpdateBatch? _preparedUpdate;
+    private VaKoLinkTransport? _transport;
 
     public MainWindow()
     {
@@ -61,6 +62,7 @@ public partial class MainWindow
             menuUpdateViaProxy.IsEnabled = true;
         };
         menuLog.Click += (_, _) => ShowAdvanced(logHost, "Журнал");
+        menuDiagnostics.Click += (_, _) => ShowDiagnostics();
         menuTheme.Click += (_, _) => ShowAdvanced(themeHost, "Оформление");
         menuNodeEditor.Click += (_, _) => ShowAdvanced(nodeEditorHost, "Управление нодами");
         menuAbout.Click += (_, _) => MessageBox.Show(this, Title,
@@ -77,7 +79,7 @@ public partial class MainWindow
             UpdateNodeControls();
             await RefreshConfigurationSummaryAsync();
         };
-        Loaded += async (_, _) => await RefreshConfigurationSummaryAsync();
+        BindConfigurationControls();
 
         this.WhenActivated(disposables =>
         {
@@ -182,6 +184,7 @@ public partial class MainWindow
     private void BindConnectionControls(VaKoLinkConnection connection)
     {
         var transport = new VaKoLinkTransport(() => Transport104.PrepareAsync(connection));
+        _transport = transport;
         connection.BeforeCoreStop = transport.StopBeforeVpnAsync;
         connection.IsTransportRunning = () => transport.IsRunning;
         connection.RestartTransport = transport.ToggleAsync;
@@ -209,7 +212,11 @@ public partial class MainWindow
             connectionButton.Content = connection.NeedsDisconnect && !connection.IsConnecting ? "Отключить" : "Подключить";
             connectionStatus.Text = connection.IsSwitchingNode ? "Переподключение…" : connection.Status;
             var connected = connection.IsConnected && !connection.IsSwitchingNode;
-            nodeList.Tag = connected ? connection.ConnectedNodeId : null;
+            nodeList.Tag = Tuple.Create(
+                connection.IsSwitchingNode ? connection.SwitchingFromNodeId : connection.ConnectedNodeId,
+                connection.IsSwitchingNode ? connection.SwitchingToNodeId : null);
+            connectionNotice.Text = connection.SwitchNotice ?? string.Empty;
+            connectionNotice.Visibility = connection.SwitchNotice is null ? Visibility.Collapsed : Visibility.Visible;
             connectionCard.SetResourceReference(Border.BackgroundProperty, connected ? "PultConnected" : "PultCard");
             connectionCard.SetResourceReference(Border.BorderBrushProperty, connected ? "PultConnectedOutline" : "PultOutline");
             var statusBrush = connected ? "PultGood" : connection.IsConnecting || connection.IsSwitchingNode ? "PultAccent" : "PultMuted";
@@ -223,6 +230,7 @@ public partial class MainWindow
         {
             RenderConnection();
             await RefreshConfigurationSummaryAsync();
+            _ = RefreshDailyExpiryAsync();
             await TryInstallPreparedUpdateAsync(connection);
         });
         transport.Changed += () => Dispatcher.InvokeAsync(RenderTransport);

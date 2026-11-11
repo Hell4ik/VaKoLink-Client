@@ -13,6 +13,7 @@ internal static class UpdatePackage
     internal const string PendingName = "pending.txt";
     internal const string ResultName = "result.txt";
     internal const string InstalledResultPrefix = "Установлен VaKoLink v";
+    internal const string PreviousVersionPrefix = " Предыдущая версия: v";
     internal const string InstallCommand = "--vakolink-install";
     internal const string RecoverCommand = "--vakolink-recover";
     internal const string ResumeCommand = "--vakolink-resume";

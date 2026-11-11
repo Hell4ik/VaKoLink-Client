@@ -49,6 +49,10 @@ public static class SubscriptionHandler
             }
             catch (VaKoLinkSubscriptionException ex)
             {
+                if (IsVaKoLinkWindows && VaKoLinkConfigurationMetadata.Supports(item))
+                {
+                    VaKoLinkConfigurationMetadata.ReportFailure(item, VaKoLinkConfigurationMetadata.Scope.All, ex);
+                }
                 NoticeManager.Instance.Enqueue(ex.Message);
                 await updateFunc?.Invoke(false, ex.Message);
                 await updateFunc?.Invoke(false, "-------------------------------------------------------");
@@ -57,6 +61,10 @@ public static class SubscriptionHandler
             {
                 if (IsVaKoLinkWindows)
                 {
+                    if (VaKoLinkConfigurationMetadata.Supports(item))
+                    {
+                        VaKoLinkConfigurationMetadata.ReportFailure(item, VaKoLinkConfigurationMetadata.Scope.All, ex);
+                    }
                     var message = ex is OperationCanceledException
                         ? "Истекло время ожидания ответа подписки."
                         : ex is FormatException ? ResUI.SubRequestHeadersInvalid : $"Не удалось обновить подписку ({ex.GetType().Name}).";
@@ -128,12 +136,13 @@ public static class SubscriptionHandler
             return await downloadHandle.DownloadVaKoLinkSubscriptionAsync(uri, blProxy, userAgent, receiveUsage);
         }
 
-        var result = await downloadHandle.TryDownloadString(url, blProxy, userAgent);
+        var portalUsage = IsVaKoLinkWindows && allowDeviceApproval ? receiveUsage : null;
+        var result = await downloadHandle.TryDownloadSubscriptionStringAsync(url, blProxy, userAgent, portalUsage);
 
         // If download with proxy fails, try direct connection
         if (blProxy && result.IsNullOrEmpty())
         {
-            result = await downloadHandle.TryDownloadString(url, false, userAgent);
+            result = await downloadHandle.TryDownloadSubscriptionStringAsync(url, false, userAgent, portalUsage);
         }
 
         return result ?? string.Empty;
@@ -184,10 +193,11 @@ public static class SubscriptionHandler
             allowDeviceApproval: item.ConvertTarget.IsNullOrEmpty(), receiveUsage: value => usage = value);
         if (usage is not null)
         {
-            await SQLiteHelper.Instance.ExecuteAsync(
-                "UPDATE SubItem SET VaKoLinkExpiresAt = ?, VaKoLinkUsedBytes = ?, VaKoLinkTotalBytes = ? WHERE Id = ? AND Url = ?",
-                usage.ExpiresAt, usage.UsedBytes, usage.TotalBytes, item.Id, item.Url);
-            AppEvents.VaKoLinkConfigurationUsageChanged.Publish(item.Id);
+            await VaKoLinkConfigurationMetadata.SaveAsync(item, usage, VaKoLinkConfigurationMetadata.Scope.All);
+        }
+        else if (result.IsNullOrEmpty() && IsVaKoLinkWindows && VaKoLinkConfigurationMetadata.Supports(item))
+        {
+            VaKoLinkConfigurationMetadata.ReportFailure(item, VaKoLinkConfigurationMetadata.Scope.All);
         }
         return result;
     }

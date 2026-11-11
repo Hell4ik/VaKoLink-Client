@@ -16,6 +16,7 @@ public partial class MainWindow
     private CancellationTokenSource? _clientUpdateCancellation;
     private bool _installingClient;
     private bool _showWhatsNew;
+    private Version? _previousClientVersion;
 
     private async Task<string> CheckClientUpdateAsync(VaKoLinkConnection connection)
     {
@@ -148,12 +149,14 @@ public partial class MainWindow
     {
         try
         {
-            if (ClientUpdateProcess.TakeResult() is { } result)
+            if (ClientUpdateProcess.TakeResult() is { } saved)
             {
+                var result = saved.Text;
                 Logging.SaveLog(result);
                 if (UpdatePackage.IsInstalledResult(result, InstalledClientVersion))
                 {
                     _showWhatsNew = true;
+                    _previousClientVersion = ClientUpdateProcess.FindPreviousVersion(result, saved.SavedAt, InstalledClientVersion);
                     ShowWhatsNewWhenVisible();
                 }
                 else
@@ -175,7 +178,7 @@ public partial class MainWindow
             return;
         }
         _showWhatsNew = false;
-        new WhatsNewWindow(InstalledClientVersion) { Owner = this }.Show();
+        new WhatsNewWindow(InstalledClientVersion, _previousClientVersion) { Owner = this }.Show();
     }
 
     private void EndClientUpdate()

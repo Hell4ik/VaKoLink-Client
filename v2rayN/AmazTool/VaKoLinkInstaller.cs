@@ -59,8 +59,8 @@ internal static class VaKoLinkInstaller
                     {
                         throw new InvalidDataException("Неверная версия пакета.");
                     }
-                    await InstallAsync(root, work, transaction, expected, args[4]);
-                    report = $"{UpdatePackage.InstalledResultPrefix}{args[3]}.";
+                    var previous = await InstallAsync(root, work, transaction, expected, args[4]);
+                    report = $"{UpdatePackage.InstalledResultPrefix}{args[3]}.{UpdatePackage.PreviousVersionPrefix}{previous}.";
                 }
                 exitCode = 0;
                 restart = true;
@@ -144,7 +144,7 @@ internal static class VaKoLinkInstaller
         return 1;
     }
 
-    internal static async Task InstallAsync(string root, string work, string transaction, Version version, string sha256)
+    internal static async Task<Version> InstallAsync(string root, string work, string transaction, Version version, string sha256)
     {
         var pending = UpdatePackage.SafePath(work, UpdatePackage.PendingName);
         if (File.Exists(pending))
@@ -152,7 +152,8 @@ internal static class VaKoLinkInstaller
             throw new InvalidOperationException("Сначала нужно восстановить прерванное обновление VaKoLink.");
         }
         var installed = FileVersionInfo.GetVersionInfo(UpdatePackage.SafePath(root, UpdatePackage.ClientName));
-        if (version <= new Version(installed.FileMajorPart, installed.FileMinorPart, installed.FileBuildPart, installed.FilePrivatePart))
+        var previous = new Version(installed.FileMajorPart, installed.FileMinorPart, installed.FileBuildPart, installed.FilePrivatePart);
+        if (version <= previous)
         {
             throw new InvalidOperationException("Этот пакет не новее установленной версии VaKoLink.");
         }
@@ -200,6 +201,7 @@ internal static class VaKoLinkInstaller
             File.Delete(pending);
             throw;
         }
+        return previous;
     }
 
     private static void RollBack(string root, string transaction)

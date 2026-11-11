@@ -194,20 +194,28 @@ public class DownloadService
     /// <summary>
     /// Tries to download string content using proxy switch setting.
     /// </summary>
-    public async Task<string?> TryDownloadString(string url, bool blProxy, string userAgent, CancellationToken cancellationToken = default)
+    public Task<string?> TryDownloadString(string url, bool blProxy, string userAgent, CancellationToken cancellationToken = default) =>
+        TryDownloadSubscriptionStringAsync(url, blProxy, userAgent, null, cancellationToken);
+
+    internal async Task<string?> TryDownloadSubscriptionStringAsync(string url, bool blProxy, string userAgent,
+        Action<VaKoLinkConfigurationUsage>? receiveUsage, CancellationToken cancellationToken = default)
     {
         var webProxy = await GetWebProxy(blProxy, cancellationToken);
-        return await TryDownloadString(url, webProxy, userAgent, cancellationToken);
+        return await TryDownloadStringAsync(url, webProxy, userAgent, cancellationToken, receiveUsage);
     }
 
     /// <summary>
     /// Tries to download string content with a specified proxy.
     /// </summary>
-    public async Task<string?> TryDownloadString(string url, IWebProxy? webProxy, string userAgent, CancellationToken cancellationToken = default)
+    public Task<string?> TryDownloadString(string url, IWebProxy? webProxy, string userAgent, CancellationToken cancellationToken = default) =>
+        TryDownloadStringAsync(url, webProxy, userAgent, cancellationToken);
+
+    private async Task<string?> TryDownloadStringAsync(string url, IWebProxy? webProxy, string userAgent,
+        CancellationToken cancellationToken, Action<VaKoLinkConfigurationUsage>? receiveUsage = null)
     {
         try
         {
-            var result1 = await DownloadStringAsync(url, webProxy, userAgent, cancellationToken);
+            var result1 = await DownloadStringAsync(url, webProxy, userAgent, cancellationToken, receiveUsage);
             if (result1.IsNotEmpty())
             {
                 return result1;
@@ -245,7 +253,8 @@ public class DownloadService
     /// <summary>
     /// Downloads string content via HttpClient.
     /// </summary>
-    private async Task<string?> DownloadStringAsync(string url, IWebProxy? webProxy, string userAgent, CancellationToken cancellationToken = default)
+    private async Task<string?> DownloadStringAsync(string url, IWebProxy? webProxy, string userAgent,
+        CancellationToken cancellationToken, Action<VaKoLinkConfigurationUsage>? receiveUsage)
     {
         try
         {
@@ -273,7 +282,18 @@ public class DownloadService
             timeoutCts.CancelAfter(webProxy is null ? Global.DirectFetch : Global.ProxyFetch);
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
-            return await client.GetStringAsync(url, linkedCts.Token);
+            if (receiveUsage is null || !VaKoLinkSubscription.IsPortalUri(uri))
+            {
+                return await client.GetStringAsync(url, linkedCts.Token);
+            }
+
+            using var response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
+            response.EnsureSuccessStatusCode();
+            var content = await response.Content.ReadAsStringAsync(linkedCts.Token);
+            receiveUsage(VaKoLinkConfigurationUsage.Parse(
+                response.RequestMessage?.RequestUri is { } finalUri && VaKoLinkSubscription.IsPortalUri(finalUri) &&
+                response.Headers.TryGetValues("Subscription-Userinfo", out var values) ? values : []));
+            return content;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -313,16 +333,21 @@ public class DownloadService
     }
 
     internal async Task<string> DownloadVaKoLinkSubscriptionAsync(Uri uri, bool blProxy, string userAgent,
-        Action<VaKoLinkConfigurationUsage>? receiveUsage = null)
+        Action<VaKoLinkConfigurationUsage>? receiveUsage = null, bool metadataOnly = false)
     {
         var webProxy = await GetWebProxy(blProxy);
-        using var client = new HttpClient(CreateStringHttpHandler(webProxy, allowRedirects: false));
+        using var handler = CreateStringHttpHandler(webProxy, allowRedirects: false);
+        if (metadataOnly)
+        {
+            handler.MaxResponseDrainSize = 0;
+        }
+        using var client = new HttpClient(handler, disposeHandler: false);
         client.Timeout = Timeout.InfiniteTimeSpan;
         client.DefaultRequestHeaders.UserAgent.TryParseAdd(userAgent.IsNullOrEmpty() ? Utils.GetVersion(false) : userAgent);
         client.DefaultRequestHeaders.Accept.ParseAdd("*/*");
         using var timeout = new CancellationTokenSource(webProxy is null ? Global.DirectFetch : Global.ProxyFetch);
         return await VaKoLinkSubscription.DownloadAsync(client, uri, RequestHeaders ?? new Dictionary<string, string>(),
-            () => VaKoLinkSubscription.GetOrCreateDeviceId(Utils.GetConfigPath("vakolink-device-id")), timeout.Token, receiveUsage);
+            () => VaKoLinkSubscription.GetOrCreateDeviceId(Utils.GetConfigPath("vakolink-device-id")), timeout.Token, receiveUsage, metadataOnly);
     }
 
     private static SocketsHttpHandler CreateStringHttpHandler(IWebProxy? webProxy, bool allowRedirects = true)

@@ -1,3 +1,8 @@
+using System.Windows.Threading;
+using ServiceLib.Services;
+using static ServiceLib.Services.VaKoLinkConfigurationMetadata;
+using Scope = ServiceLib.Services.VaKoLinkConfigurationMetadata.Scope;
+
 namespace v2rayN.Views;
 
 public partial class MainWindow
@@ -5,6 +10,74 @@ public partial class MainWindow
     private static readonly CultureInfo ConfigurationCulture = CultureInfo.GetCultureInfo("ru-RU");
     private static readonly TimeZoneInfo ConfigurationTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Ekaterinburg Standard Time");
     private int _configurationRefresh;
+    private SubItem? _configurationSummary;
+    private bool _refreshingTraffic;
+    private DateOnly? _expiryCheckDay;
+    private bool _checkingExpiry;
+
+    private void BindConfigurationControls()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
+        timer.Tick += async (_, _) => await RefreshDailyExpiryAsync();
+        Loaded += async (_, _) =>
+        {
+            timer.Start();
+            await RefreshConfigurationSummaryAsync();
+            await RefreshDailyExpiryAsync();
+        };
+        Closed += (_, _) => timer.Stop();
+        refreshTrafficButton.Click += async (_, _) =>
+        {
+            if (_refreshingTraffic || _configurationSummary is not { } item || !Supports(item))
+            {
+                return;
+            }
+            _refreshingTraffic = true;
+            RenderTrafficSummary(item);
+            try
+            {
+                await RefreshAsync(item, Scope.Traffic);
+            }
+            finally
+            {
+                _refreshingTraffic = false;
+                await RefreshConfigurationSummaryAsync();
+            }
+        };
+    }
+
+    private async Task RefreshDailyExpiryAsync()
+    {
+        var day = ConfigurationDay(DateTimeOffset.UtcNow);
+        if (AppManager.Instance.ConnectionModes is not { Ready: true } || _checkingExpiry || _expiryCheckDay == day)
+        {
+            return;
+        }
+        _checkingExpiry = true;
+        try
+        {
+            await RefreshConfigurationSummaryAsync();
+            var items = await AppManager.Instance.SubItems() ?? [];
+            _expiryCheckDay = day;
+            foreach (var item in items.Where(item => item.Enabled && Supports(item) &&
+                (item.VaKoLinkExpiryCheckedAt is not { } checkedAt ||
+                 ConfigurationDay(DateTimeOffset.FromUnixTimeSeconds(checkedAt)) < day)))
+            {
+                await RefreshAsync(item, Scope.Expiry);
+            }
+        }
+        catch (Exception error)
+        {
+            Logging.SaveLog("Ежедневное обновление срока конфигурации", error);
+        }
+        finally
+        {
+            _checkingExpiry = false;
+        }
+    }
+
+    private static DateOnly ConfigurationDay(DateTimeOffset value) =>
+        DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(value, ConfigurationTimeZone).Date);
 
     private async Task RefreshConfigurationSummaryAsync()
     {
@@ -25,9 +98,7 @@ public partial class MainWindow
             }
             else if (selected is null && manager.ConnectionModes?.ConnectedNodeId is null)
             {
-                var configurations = (await manager.SubItems() ?? []).Where(sub => sub.Enabled &&
-                    (sub.VaKoLinkExpiresAt.HasValue || sub.VaKoLinkUsedBytes.HasValue ||
-                     sub.VaKoLinkTotalBytes.HasValue)).Take(2).ToArray();
+                var configurations = (await manager.SubItems() ?? []).Where(sub => sub.Enabled && Supports(sub)).Take(2).ToArray();
                 item = configurations is [var only] ? only : null;
             }
         }
@@ -37,14 +108,17 @@ public partial class MainWindow
         }
         if (refresh == _configurationRefresh)
         {
+            _configurationSummary = item;
             RenderConfigurationSummary(item, DateTimeOffset.Now);
         }
     }
 
     private void RenderConfigurationSummary(SubItem? item, DateTimeOffset now)
     {
-        configurationStatus.Text = "Статус конфигурации — Нет данных";
-        configurationExpiry.Text = "Срок конфигурации — Нет данных";
+        var expiryFailure = item is null ? null : GetFailure(item.Id, Scope.Expiry);
+        configurationStatus.Text = expiryFailure ?? (item?.VaKoLinkExpiryCheckedAt is null
+            ? "Срок конфигурации ещё не обновлялся" : "Портал не передал срок конфигурации");
+        configurationExpiry.Text = string.Empty;
         if (item?.VaKoLinkExpiresAt is 0)
         {
             configurationStatus.Text = "Конфигурация активна";
@@ -60,18 +134,82 @@ public partial class MainWindow
             configurationExpiry.Text = expires <= now ? $"Действовала до {date}"
                 : $"Действует до {date} — осталось {days} {ConfigurationDays(days)}";
         }
-
-        var used = item?.VaKoLinkUsedBytes is { } usedBytes ? ConfigurationGigabytes(usedBytes) : null;
-        const string traffic = "Общий трафик конфигурации";
-        configurationTraffic.Text = (used, item?.VaKoLinkTotalBytes) switch
+        if (expiryFailure is not null && item?.VaKoLinkExpiresAt is not null)
         {
-            ({ } amount, 0) => $"{traffic} {amount} ГБ — без лимита",
-            ({ } amount, { } limit) => $"{traffic} {amount} из {ConfigurationGigabytes(limit)} ГБ",
-            ({ } amount, null) => $"{traffic} {amount} ГБ, лимит — Нет данных",
-            (null, 0) => $"{traffic} — Нет данных, без лимита",
-            (null, { } limit) => $"{traffic} — Нет данных из {ConfigurationGigabytes(limit)} ГБ",
-            _ => $"{traffic} — Нет данных"
+            configurationExpiry.Text += " · срок не обновился";
+        }
+        if (item is null || !Supports(item))
+        {
+            configurationStatus.Text = "Срок конфигурации — Нет данных";
+            configurationExpiry.Text = string.Empty;
+        }
+        RenderTrafficSummary(item);
+    }
+
+    private void RenderTrafficSummary(SubItem? item)
+    {
+        var available = item is { Enabled: true } && Supports(item);
+        var failure = item is null ? null : GetFailure(item.Id, Scope.Traffic);
+        var used = item?.VaKoLinkUsedBytes;
+        var limit = item?.VaKoLinkTotalBytes;
+        trafficUsed.Text = used is { } bytes ? ConfigurationGigabytes(bytes) : "Нет данных";
+        trafficLimit.Text = (used, limit) switch
+        {
+            ({ }, 0) => " ГБ · без лимита",
+            (null, 0) => " · без лимита",
+            (null, { } total) => $" · лимит {ConfigurationGigabytes(total)} ГБ",
+            ({ }, { } total) => $" из {ConfigurationGigabytes(total)} ГБ",
+            ({ }, null) => " ГБ · лимит неизвестен",
+            _ => string.Empty
         };
+        trafficMeter.Visibility = used.HasValue && limit is > 0 ? Visibility.Visible : Visibility.Collapsed;
+        trafficMeter.Value = used.HasValue && limit is > 0 ? Math.Clamp(100d * used.Value / limit.Value, 0, 100) : 0;
+        refreshTrafficButton.IsEnabled = available && !_refreshingTraffic &&
+            AppManager.Instance.ConnectionModes is { Ready: true };
+        refreshTrafficButton.Content = _refreshingTraffic ? "Обновляем…" : "Обновить расход";
+
+        var freshness = item?.VaKoLinkTrafficCheckedAt is { } checkedAt
+            ? FormatTrafficTime(checkedAt) : null;
+        trafficFreshness.Text = !available ? string.Empty
+            : failure is not null ? (freshness is null ? failure : $"Данные {freshness} · сбой обновления")
+            : freshness is null ? "Ещё не обновлялся"
+            : used is null && limit is null ? "Портал не передал данные"
+            : $"Обновлено {freshness}";
+    }
+
+    private static string FormatTrafficTime(long checkedAt)
+    {
+        var updated = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(checkedAt), ConfigurationTimeZone);
+        return ConfigurationDay(updated) == ConfigurationDay(DateTimeOffset.UtcNow)
+            ? $"в {updated:HH:mm}" : updated.ToString("dd.MM HH:mm", ConfigurationCulture);
+    }
+
+    private void ShowDiagnostics()
+    {
+        var item = _configurationSummary;
+        var connection = AppManager.Instance.ConnectionModes;
+        var configuration = item is null || !Supports(item) ? "Нет конфигурации портала"
+            : GetFailure(item.Id, Scope.Traffic) ?? GetFailure(item.Id, Scope.Expiry) ??
+              (item.VaKoLinkExpiryCheckedAt is not null || item.VaKoLinkTrafficCheckedAt is not null
+                  ? "Ответ портала получен" : "Ещё не проверялась");
+        var vpn = connection is { IsConnected: true } ? $"Подключено · {(connection.UseTun ? "TUN" : "Proxy")}"
+            : connection is { IsConnecting: true } ? "Подключение…" : "Отключено";
+        if (connection?.DiagnosticFailure is { } failure)
+        {
+            vpn += $" · {failure}";
+        }
+        var transport = _transport?.DiagnosticFailure ??
+            (_transport is { CleanupPending: true } ? "Очистка не подтверждена"
+            : _transport is { Busy: true } ? "Выполняется операция"
+            : _transport is { IsRunning: true } ? "Работает" : "Остановлен");
+
+        new DiagnosticsWindow(InstalledClientVersion,
+            [
+                new("Конфигурация", configuration),
+                new("Ядро", connection?.IsCoreRunning == true ? "Запущено" : "Остановлено"),
+                new("VPN", vpn),
+                new("Transport", transport)
+            ]) { Owner = this }.ShowDialog();
     }
 
     private static string ConfigurationDays(int days) => (days % 100) is >= 11 and <= 14 ? "дней"

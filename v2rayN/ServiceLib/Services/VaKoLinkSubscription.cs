@@ -1,6 +1,9 @@
 namespace ServiceLib.Services;
 
-internal sealed class VaKoLinkSubscriptionException(string message) : Exception(message);
+internal sealed class VaKoLinkSubscriptionException(string message, HttpStatusCode? statusCode = null) : Exception(message)
+{
+    internal HttpStatusCode? StatusCode { get; } = statusCode;
+}
 
 internal static class VaKoLinkSubscription
 {
@@ -11,13 +14,16 @@ internal static class VaKoLinkSubscription
     private const string DeviceOsHeader = "x-device-os";
     private const int MaxRedirects = 10;
 
-    internal static bool IsPortalSubscription(Uri uri) =>
+    internal static bool IsPortalUri(Uri uri) =>
         uri.IsAbsoluteUri && uri.Scheme == Uri.UriSchemeHttps && uri.IsDefaultPort && uri.UserInfo.Length == 0 &&
-        uri.IdnHost.Equals("access.vakolink.com", StringComparison.OrdinalIgnoreCase) &&
-        uri.AbsolutePath.StartsWith("/s/", StringComparison.Ordinal) && uri.AbsolutePath.Length > 3;
+        uri.IdnHost.Equals("access.vakolink.com", StringComparison.OrdinalIgnoreCase);
+
+    internal static bool IsPortalSubscription(Uri uri) =>
+        IsPortalUri(uri) && uri.AbsolutePath.StartsWith("/s/", StringComparison.Ordinal) && uri.AbsolutePath.Length > 3;
 
     internal static async Task<string> DownloadAsync(HttpClient client, Uri uri, IReadOnlyDictionary<string, string> headers,
-        Func<string> getDeviceId, CancellationToken cancellationToken, Action<VaKoLinkConfigurationUsage>? receiveUsage = null)
+        Func<string> getDeviceId, CancellationToken cancellationToken, Action<VaKoLinkConfigurationUsage>? receiveUsage = null,
+        bool metadataOnly = false)
     {
         var manual = headers.GetValueOrDefault(HwidHeader);
         var hwid = string.IsNullOrWhiteSpace(manual) ? null : manual;
@@ -26,16 +32,16 @@ internal static class VaKoLinkSubscription
             : "Windows";
         for (var attempt = 0; ; attempt++)
         {
-            var (response, trusted) = await SendAsync(client, uri, headers, hwid, deviceOs, cancellationToken);
+            var (response, trusted, portal) = await SendAsync(client, uri, headers, hwid, deviceOs, cancellationToken, metadataOnly);
             using (response)
             {
                 if (response.IsSuccessStatusCode)
                 {
-                    var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                    var content = metadataOnly ? string.Empty : await response.Content.ReadAsStringAsync(cancellationToken);
                     if (receiveUsage is not null)
                     {
                         receiveUsage(VaKoLinkConfigurationUsage.Parse(
-                            trusted && response.Headers.TryGetValues("Subscription-Userinfo", out var values) ? values : []));
+                            portal && response.Headers.TryGetValues("Subscription-Userinfo", out var values) ? values : []));
                     }
                     return content;
                 }
@@ -46,28 +52,30 @@ internal static class VaKoLinkSubscription
                     var message = await ReadPortalErrorAsync(response.Content, cancellationToken);
                     if (message == AwaitsApproval)
                     {
-                        throw new VaKoLinkSubscriptionException(PendingMessage);
+                        throw new VaKoLinkSubscriptionException(PendingMessage, response.StatusCode);
                     }
                     if (message == RequiresHwid)
                     {
                         if (attempt != 0 || hwid is not null)
                         {
-                            throw new VaKoLinkSubscriptionException("Портал требует HWID и не принял отправленный идентификатор.");
+                            throw new VaKoLinkSubscriptionException("Портал требует HWID и не принял отправленный идентификатор.", response.StatusCode);
                         }
                         hwid = getDeviceId();
                         continue;
                     }
                 }
 
-                throw new VaKoLinkSubscriptionException($"Не удалось получить подписку. HTTP {(int)response.StatusCode}.");
+                throw new VaKoLinkSubscriptionException($"Не удалось получить подписку. HTTP {(int)response.StatusCode}.", response.StatusCode);
             }
         }
     }
 
-    private static async Task<(HttpResponseMessage Response, bool Trusted)> SendAsync(HttpClient client, Uri uri,
-        IReadOnlyDictionary<string, string> headers, string? hwid, string deviceOs, CancellationToken cancellationToken)
+    private static async Task<(HttpResponseMessage Response, bool Trusted, bool Portal)> SendAsync(HttpClient client, Uri uri,
+        IReadOnlyDictionary<string, string> headers, string? hwid, string deviceOs, CancellationToken cancellationToken,
+        bool metadataOnly)
     {
         var trusted = IsPortalSubscription(uri);
+        var portal = IsPortalUri(uri);
         var sameOrigin = true;
         for (var redirects = 0; ; redirects++)
         {
@@ -92,16 +100,18 @@ internal static class VaKoLinkSubscription
             if (response.StatusCode is not (HttpStatusCode.MovedPermanently or HttpStatusCode.Found or HttpStatusCode.SeeOther
                 or HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect) || response.Headers.Location is not { } location)
             {
-                return (response, trusted);
+                return (response, trusted, portal);
             }
             response.Dispose();
             if (redirects >= MaxRedirects || !Uri.TryCreate(uri, location, out var next) ||
-                next.Scheme != Uri.UriSchemeHttps || next.UserInfo.Length != 0)
+                next.Scheme != Uri.UriSchemeHttps || next.UserInfo.Length != 0 ||
+                (metadataOnly && !IsPortalUri(next)))
             {
                 throw new VaKoLinkSubscriptionException("Портал вернул недопустимое перенаправление подписки.");
             }
             sameOrigin &= uri.IdnHost.Equals(next.IdnHost, StringComparison.OrdinalIgnoreCase) && uri.Port == next.Port;
             trusted &= IsPortalSubscription(next);
+            portal &= IsPortalUri(next);
             uri = next;
         }
     }

@@ -41,4 +41,6 @@ public class SubItem
     public long? VaKoLinkExpiresAt { get; set; }
     public long? VaKoLinkUsedBytes { get; set; }
     public long? VaKoLinkTotalBytes { get; set; }
+    public long? VaKoLinkTrafficCheckedAt { get; set; }
+    public long? VaKoLinkExpiryCheckedAt { get; set; }
 }
