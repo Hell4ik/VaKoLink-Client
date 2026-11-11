@@ -186,22 +186,31 @@
                                     <TextBlock Margin="0,0,0,17" FontSize="32" FontWeight="Bold" TextTrimming="CharacterEllipsis"
                                                Text="{Binding Tag, RelativeSource={RelativeSource Self}, Converter={StaticResource PultNodeLabel}}"
                                                x:Name="selectedNodeName" />
-                                    <TextBlock Margin="0,0,0,8" FontSize="14" Text="Режим" />
-                                    <Border Padding="4" Height="45" CornerRadius="10" Background="{DynamicResource PultControl}">
+                                    <DockPanel Margin="0,0,0,6">
+                                        <StackPanel x:Name="connectionTimerPanel" DockPanel.Dock="Right" Orientation="Horizontal"
+                                                    VerticalAlignment="Center" Visibility="Collapsed">
+                                            <Path Width="12" Height="12" Margin="0,0,5,0" VerticalAlignment="Center"
+                                                  Stroke="{Binding Foreground, ElementName=connectionTimer}"
+                                                  Data="M 6,1 A 5,5 0 1 1 5.99,1 Z M 6,3 L 6,6 L 8,6" />
+                                            <TextBlock x:Name="connectionTimer" FontFamily="Consolas" FontSize="12"
+                                                       AutomationProperties.Name="Время подключения" />
+                                        </StackPanel>
+                                        <TextBlock FontSize="14" Text="Режим" />
+                                    </DockPanel>
+                                    <Border Padding="3" Height="42" CornerRadius="9" Background="{DynamicResource PultModeTrack}">
                                         <UniformGrid Rows="1" Columns="2">
                                             <RadioButton x:Name="modeProxy" Style="{StaticResource PultMode}" GroupName="VaKoLinkMode" Content="Proxy" />
                                             <RadioButton x:Name="modeTun" Style="{StaticResource PultMode}" GroupName="VaKoLinkMode" Content="TUN" />
                                         </UniformGrid>
                                     </Border>
-                                    <Button x:Name="connectionButton" Margin="0,14,0,0" Height="48" FontWeight="SemiBold"
-                                            Background="#0977A9" BorderBrush="#29B8F4" Foreground="White"
+                                    <Button x:Name="connectionButton" Margin="0,10,0,0" Height="42" FontWeight="SemiBold"
                                             Style="{StaticResource PultButton}" Content="Подключить" />
                                     <TextBlock x:Name="connectionNotice" Margin="0,9,0,0" Visibility="Collapsed" TextWrapping="Wrap"
                                                FontSize="12" Foreground="{DynamicResource PultMedium}" AutomationProperties.LiveSetting="Polite" />
                                 </StackPanel>
                             </Border>
 
-                            <Border Margin="0,11,0,0" Padding="15,12" Style="{StaticResource PultCardStyle}">
+                            <Border x:Name="transportCard" Margin="0,11,0,0" Padding="15,12" Style="{StaticResource PultCardStyle}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />

@@ -11,6 +11,7 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
     private bool _requiresPreCore;
     private bool _closing;
     private bool _connected;
+    private long? _connectedAt;
     private ProfileItem? _connectedProfile;
     private bool _restartingTransport;
     private CancellationTokenSource? _monitor;
@@ -28,6 +29,7 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
     public bool IsCoreRunning => _ownsCore && CoreManager.Instance.IsConnectionRunning(_requiresPreCore);
     public bool UseTun => config.VaKoLinkUseTun;
     public bool IsConnected => _connected;
+    public TimeSpan? ConnectionDuration => _connectedAt is { } started ? Stopwatch.GetElapsedTime(started) : null;
     public string? ConnectedNodeId => _connectedProfile?.IndexId;
     public string? ConnectedNodeName => _connectedProfile?.Remarks;
     public int? ConnectedProxyPort { get; private set; }
@@ -106,7 +108,7 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
         var reconnect = _connected;
         if (NeedsDisconnect)
         {
-            await StopAsync();
+            await StopAsync(preserveSession: reconnect);
         }
 
         var previous = UseTun;
@@ -163,7 +165,7 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
         string? switchFailure = null;
         try
         {
-            await StopAsync();
+            await StopAsync(preserveSession: true);
             await StartAsync(target);
         }
         catch (Exception ex)
@@ -178,7 +180,7 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
             }
             try
             {
-                await StopAsync();
+                await StopAsync(preserveSession: true);
                 await StartAsync(previous);
             }
             catch (Exception rollback)
@@ -341,6 +343,10 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
         }
         finally
         {
+            if (!_connected)
+            {
+                _connectedAt = null;
+            }
             IsConnecting = false;
             IsSwitchingNode = false;
             SwitchingFromNodeId = null;
@@ -457,12 +463,13 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
         ConnectedSessionToken = _monitor.Token;
         _connectedProfile = profile;
         _connected = true;
+        _connectedAt ??= Stopwatch.GetTimestamp();
         IsConnecting = false;
         Status = "Подключено";
         _ = MonitorAsync(useTun, port, ConnectedSessionToken);
     }
 
-    private async Task StopAsync()
+    private async Task StopAsync(bool preserveSession = false)
     {
         _diagnosticStage = "Остановка подключения";
         if (_ownsCore && BeforeCoreStop is not null)
@@ -473,6 +480,10 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
         _monitor?.Dispose();
         _monitor = null;
         _connected = false;
+        if (!preserveSession)
+        {
+            _connectedAt = null;
+        }
         _connectedProfile = null;
         ConnectedProxyPort = null;
         ConnectedSessionToken = default;

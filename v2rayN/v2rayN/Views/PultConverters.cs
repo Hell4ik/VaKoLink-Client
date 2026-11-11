@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Windows.Media.Imaging;
+
 namespace v2rayN.Views;
 
 public sealed class PultActiveNodeConverter : IMultiValueConverter
@@ -11,43 +14,62 @@ public sealed class PultActiveNodeConverter : IMultiValueConverter
 
 public sealed class PultNodeLabelConverter : IValueConverter
 {
+    private const string FlagsRoot = "pack://application:,,,/VaKoLink;component/Resources/Flags/";
+    private static readonly Lazy<Dictionary<string, string[]>> Countries = new(() =>
+    {
+        using var stream = Application.GetResourceStream(new Uri(FlagsRoot + "countries.json")).Stream;
+        return JsonSerializer.Deserialize<Dictionary<string, string[]>>(stream)!;
+    });
+    private static readonly Lazy<(string Code, string Name)[]> CountryNames = new(() => Countries.Value
+        .SelectMany(country => country.Value.Select(name => (Code: country.Key, Name: name)))
+        .OrderByDescending(country => country.Name.Length).ToArray());
+    private static readonly Dictionary<string, BitmapSource> Flags = new(StringComparer.Ordinal);
+
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         var label = (value as string)?.Trim() ?? "";
-        var split = label.IndexOf(' ');
-        var prefix = split > 0 ? label[..split] : "";
-        var code = prefix.Normalize(NormalizationForm.FormKC).ToUpperInvariant();
-        var flag = prefix.EnumerateRunes().Select(rune => rune.Value - 0x1F1E6).ToArray();
-        if (flag.Length == 2 && flag.All(letter => letter is >= 0 and < 26))
+        var (code, prefixLength) = ReadPrefix(label);
+        if (parameter is "Flag")
         {
-            code = string.Concat((char)('A' + flag[0]), (char)('A' + flag[1]));
+            code ??= CountryNames.Value.FirstOrDefault(country => label.StartsWith(country.Name, StringComparison.OrdinalIgnoreCase)
+                && (label.Length == country.Name.Length || IsSeparator(label[country.Name.Length]))).Code;
+            if (code is null)
+            {
+                return null!;
+            }
+            if (!Flags.TryGetValue(code, out var flag))
+            {
+                flag = BitmapFrame.Create(new Uri(FlagsRoot + code + ".png"), BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+                flag.Freeze();
+                Flags.Add(code, flag);
+            }
+            return flag;
         }
-        if (!IsCountryCode(code))
-        {
-            return parameter is "Badge" ? "•" : label.Length > 0 ? label : "Нода не выбрана";
-        }
-        return parameter is "Badge" ? code : label[(split + 1)..].TrimStart();
+        var name = label[prefixLength..].TrimStart(' ', '·', '-', '–', '—');
+        return name.Length > 0 ? name : label.Length > 0 ? label : "Нода не выбрана";
     }
 
-    private static bool IsCountryCode(string code)
+    private static (string? Code, int Length) ReadPrefix(string label)
     {
-        if (code == "UK")
+        var flag = label.EnumerateRunes().Take(2).Select(rune => rune.Value - 0x1F1E6).ToArray();
+        if (flag is [var first, var second] && first is >= 0 and < 26 && second is >= 0 and < 26)
         {
-            return true;
+            var emojiCode = string.Concat((char)('a' + first), (char)('a' + second));
+            return Countries.Value.ContainsKey(emojiCode) ? (emojiCode, 4) : (null, 0);
         }
-        if (code.Length != 2 || !code.All(char.IsAsciiLetterUpper))
+        if (label.Length > 2 && IsSeparator(label[2]))
         {
-            return false;
+            var code = label[..2].Normalize(NormalizationForm.FormKC).ToLowerInvariant();
+            code = code == "uk" ? "gb" : code;
+            if (Countries.Value.ContainsKey(code))
+            {
+                return (code, 2);
+            }
         }
-        try
-        {
-            return new RegionInfo(code).TwoLetterISORegionName == code;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
+        return (null, 0);
     }
+
+    private static bool IsSeparator(char value) => char.IsWhiteSpace(value) || value is '·' or '-' or '–' or '—' or ',' or ':';
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();

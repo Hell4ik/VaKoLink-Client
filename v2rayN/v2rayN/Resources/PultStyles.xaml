@@ -46,6 +46,7 @@
     <Style x:Key="PultMode" TargetType="RadioButton">
         <Setter Property="Foreground" Value="{DynamicResource PultText}" />
         <Setter Property="FontSize" Value="14" />
+        <Setter Property="Tag" Value="{DynamicResource PultSelected}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
@@ -54,8 +55,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="surface" Property="Background" Value="{DynamicResource PultSelected}" />
-                            <Setter Property="Foreground" Value="{DynamicResource PultAccent}" />
+                            <Setter TargetName="surface" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="surface" Property="BorderBrush" Value="{DynamicResource PultControlOutline}" />
@@ -109,8 +109,11 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <Border Width="33" Height="29" CornerRadius="6" Background="{DynamicResource PultControl}">
-                <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold"
-                           Text="{Binding Remarks, Converter={StaticResource PultNodeLabel}, ConverterParameter=Badge}" />
+                <Grid>
+                    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource PultMuted}" Text="•" />
+                    <Image Width="27" Height="19" Stretch="Uniform"
+                           Source="{Binding Remarks, Converter={StaticResource PultNodeLabel}, ConverterParameter=Flag}" />
+                </Grid>
             </Border>
             <DockPanel Grid.Column="1" Margin="8,0,6,0">
                 <TextBlock DockPanel.Dock="Right" Margin="6,0,0,0" VerticalAlignment="Center" Text="✓" FontWeight="SemiBold"

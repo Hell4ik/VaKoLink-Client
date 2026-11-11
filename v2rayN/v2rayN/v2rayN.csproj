@@ -14,7 +14,7 @@
 		<SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<CETCompat>false</CETCompat>
-		<VaKoLinkRevision>23</VaKoLinkRevision>
+		<VaKoLinkRevision>24</VaKoLinkRevision>
 		<VaKoLinkVersion>1.$(VaKoLinkRevision)</VaKoLinkVersion>
 		<FileVersion>$(VaKoLinkVersion).0.0</FileVersion>
 		<InformationalVersion>$(VaKoLinkVersion)</InformationalVersion>
@@ -43,6 +43,7 @@
 		<Resource Include="Resources\VaKoLinkProxy.ico" />
 		<Resource Include="Resources\v2rayN.ico" />
 		<Resource Include="Resources\VaKoLink.ico;Resources\VaKoLinkTray.ico" />
+		<Resource Include="Resources\Flags\*.png;Resources\Flags\countries.json" />
 		<AssemblyMetadata Include="VaKoLinkRevision" Value="$(VaKoLinkRevision)" />
 		<AssemblyMetadata Include="VaKoLinkVersion" Value="$(VaKoLinkVersion)" />
 		<Compile Include="..\Update\UpdatePackage.cs" Link="Update\UpdatePackage.cs" />

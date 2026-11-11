@@ -2,9 +2,11 @@ using System.Net;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using MaterialDesignThemes.Wpf;
 using ServiceLib.Services;
 using v2rayN.Base;
+using v2rayN.Common;
 using v2rayN.Manager;
 using v2rayN.ViewModels;
 
@@ -188,6 +190,81 @@ public partial class MainWindow
         connection.BeforeCoreStop = transport.StopBeforeVpnAsync;
         connection.IsTransportRunning = () => transport.IsRunning;
         connection.RestartTransport = transport.ToggleAsync;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        timer.Tick += (_, _) => RenderTimer();
+        Closed += (_, _) => timer.Stop();
+
+        void RenderTimer()
+        {
+            if (connection.ConnectionDuration is { } elapsed)
+            {
+                connectionTimerPanel.Visibility = Visibility.Visible;
+                var text = FormattableString.Invariant($"{(long)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}");
+                if (connectionTimer.Text != text)
+                {
+                    connectionTimer.Text = text;
+                }
+                if (!timer.IsEnabled)
+                {
+                    timer.Start();
+                }
+            }
+            else
+            {
+                timer.Stop();
+                connectionTimerPanel.Visibility = Visibility.Collapsed;
+                connectionTimer.Text = string.Empty;
+            }
+        }
+
+        void RenderAppearance()
+        {
+            var appearance = PultConnectionAppearances.For(
+                connection.IsConnected && !connection.IsSwitchingNode, connection.UseTun, transport.IsRunning);
+            var (surface, outline, accent, mode) = appearance switch
+            {
+                PultConnectionAppearance.Proxy => ("PultConnected", "PultConnectedOutline", "PultGood", "PultConnectedMode"),
+                PultConnectionAppearance.Transport => ("PultTransport", "PultTransportOutline", "PultTransportAccent", "PultTransportMode"),
+                PultConnectionAppearance.Tun => ("PultTun", "PultTunOutline", "PultTunAccent", "PultTunMode"),
+                _ => ("PultCard", "PultOutline", connection.IsConnecting || connection.IsSwitchingNode
+                    ? "PultAccent" : "PultMuted", "PultSelected")
+            };
+            var transportActive = appearance == PultConnectionAppearance.Transport;
+            connectionCard.SetResourceReference(Border.BackgroundProperty, surface);
+            connectionCard.SetResourceReference(Border.BorderBrushProperty, outline);
+            connectionIndicator.SetResourceReference(Shape.FillProperty, accent);
+            connectionStatus.SetResourceReference(TextBlock.ForegroundProperty, accent);
+            connectionTimer.SetResourceReference(TextBlock.ForegroundProperty, accent);
+            modeProxy.SetResourceReference(TagProperty, mode);
+            modeTun.SetResourceReference(TagProperty, mode);
+            transportCard.SetResourceReference(Border.BackgroundProperty, transportActive ? surface : "PultCard");
+            transportCard.SetResourceReference(Border.BorderBrushProperty, transportActive ? outline : "PultOutline");
+            transportStatus.SetResourceReference(TextBlock.ForegroundProperty, transportActive ? accent : "PultMuted");
+            transportButton.SetResourceReference(Control.BackgroundProperty, transport.NeedsStop ? "PultStopAction" : "PultControl");
+            transportButton.SetResourceReference(Control.BorderBrushProperty, transport.NeedsStop ? "PultStopActionOutline" : "PultControlOutline");
+            if (transport.NeedsStop)
+            {
+                transportButton.Foreground = Brushes.White;
+            }
+            else
+            {
+                transportButton.SetResourceReference(Control.ForegroundProperty, "PultText");
+            }
+            connectionButton.SetResourceReference(Control.BackgroundProperty, connection.NeedsDisconnect ? "PultControl" : "PultConnectAction");
+            connectionButton.SetResourceReference(Control.BorderBrushProperty, connection.NeedsDisconnect ? "PultControlOutline" : "PultConnectActionOutline");
+            if (connection.NeedsDisconnect)
+            {
+                connectionButton.SetResourceReference(Control.ForegroundProperty, "PultText");
+            }
+            else
+            {
+                connectionButton.Foreground = Brushes.White;
+            }
+            if (contentStatusBarView.Content is StatusBarView tray)
+            {
+                tray.SetVaKoLinkTrayState(appearance);
+            }
+        }
 
         void RenderTransport()
         {
@@ -198,10 +275,7 @@ public partial class MainWindow
             transportStatus.Text = !transport.Busy && !transport.NeedsStop && reason is not null
                 ? reason
                 : transport.Status;
-            if (contentStatusBarView.Content is StatusBarView tray)
-            {
-                tray.SetVaKoLinkTrayState(connection.IsConnected, connection.UseTun, transport.IsRunning);
-            }
+            RenderAppearance();
         }
 
         void RenderConnection()
@@ -211,17 +285,12 @@ public partial class MainWindow
             modeProxy.IsEnabled = modeTun.IsEnabled = connection.Ready && !connection.Busy;
             connectionButton.Content = connection.NeedsDisconnect && !connection.IsConnecting ? "Отключить" : "Подключить";
             connectionStatus.Text = connection.IsSwitchingNode ? "Переподключение…" : connection.Status;
-            var connected = connection.IsConnected && !connection.IsSwitchingNode;
             nodeList.Tag = Tuple.Create(
                 connection.IsSwitchingNode ? connection.SwitchingFromNodeId : connection.ConnectedNodeId,
                 connection.IsSwitchingNode ? connection.SwitchingToNodeId : null);
             connectionNotice.Text = connection.SwitchNotice ?? string.Empty;
             connectionNotice.Visibility = connection.SwitchNotice is null ? Visibility.Collapsed : Visibility.Visible;
-            connectionCard.SetResourceReference(Border.BackgroundProperty, connected ? "PultConnected" : "PultCard");
-            connectionCard.SetResourceReference(Border.BorderBrushProperty, connected ? "PultConnectedOutline" : "PultOutline");
-            var statusBrush = connected ? "PultGood" : connection.IsConnecting || connection.IsSwitchingNode ? "PultAccent" : "PultMuted";
-            connectionIndicator.SetResourceReference(Shape.FillProperty, statusBrush);
-            connectionStatus.SetResourceReference(TextBlock.ForegroundProperty, statusBrush);
+            RenderTimer();
             UpdateNodeControls();
             RenderTransport();
         }

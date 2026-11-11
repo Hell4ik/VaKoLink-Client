@@ -1,5 +1,6 @@
 using System.Windows.Media.Imaging;
 using System.Windows.Media;
+using v2rayN.Common;
 using v2rayN.Manager;
 
 namespace v2rayN.Views;
@@ -7,7 +8,7 @@ namespace v2rayN.Views;
 public partial class StatusBarView
 {
     private static Config _config;
-    private string? _vaKoLinkTrayStatus;
+    private PultConnectionAppearance? _vaKoLinkTrayAppearance;
 
     public StatusBarView()
     {
@@ -99,7 +100,7 @@ public partial class StatusBarView
         }
         else
         {
-            SetVaKoLinkTrayState(connected: false, useTun: false, transportRunning: false);
+            SetVaKoLinkTrayState(PultConnectionAppearance.Off);
         }
     }
 
@@ -113,39 +114,32 @@ public partial class StatusBarView
         Application.Current.MainWindow?.Icon = WindowsManager.Instance.GetAppIcon(_config);
     }
 
-    internal void SetVaKoLinkTrayState(bool connected, bool useTun, bool transportRunning)
+    internal void SetVaKoLinkTrayState(PultConnectionAppearance appearance)
     {
-        var (badge, status) = (connected, useTun, transportRunning) switch
-        {
-            (_, _, true) => (Brushes.MediumPurple, "Proxy + Transport"),
-            (true, true, _) => (Brushes.Tomato, "TUN подключён"),
-            (true, false, _) => (Brushes.LimeGreen, "Proxy подключён"),
-            _ => (null, "Отключено")
-        };
-        if (_vaKoLinkTrayStatus == status)
+        if (_vaKoLinkTrayAppearance == appearance)
         {
             return;
         }
 
-        var icon = BitmapFrame.Create(new Uri("pack://application:,,,/VaKoLink;component/Resources/VaKoLinkTray.ico"));
-        if (badge is null)
+        var (status, color) = appearance.Tray();
+        if (appearance == PultConnectionAppearance.Off)
         {
-            tbNotify.IconSource = icon;
+            tbNotify.IconSource = BitmapFrame.Create(new Uri("pack://application:,,,/VaKoLink;component/Resources/VaKoLinkTray.ico"));
         }
         else
         {
             var visual = new DrawingVisual();
             using (var drawing = visual.RenderOpen())
             {
-                drawing.DrawImage(icon, new Rect(0, 0, 32, 32));
-                drawing.DrawEllipse(badge, new Pen(Brushes.Black, 1.5), new Point(25, 25), 6, 6);
+                var shield = Geometry.Parse("F0 M16,2 L29,7 L29,16 C29,23 22,28 16,31 C10,28 3,23 3,16 L3,7 Z M16,8 L9,11 L9,16 C9,20 13,23 16,25 C19,23 23,20 23,16 L23,11 Z");
+                drawing.DrawGeometry(new SolidColorBrush(color), null, shield);
             }
             var rendered = new RenderTargetBitmap(32, 32, 96, 96, PixelFormats.Pbgra32);
             rendered.Render(visual);
             tbNotify.IconSource = rendered;
         }
         tbNotify.ToolTipText = $"VaKoLink — {status}";
-        _vaKoLinkTrayStatus = status;
+        _vaKoLinkTrayAppearance = appearance;
     }
 
     private async void menuExit_Click(object sender, RoutedEventArgs e)
