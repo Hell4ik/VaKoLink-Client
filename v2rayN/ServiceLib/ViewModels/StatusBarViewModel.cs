@@ -299,15 +299,23 @@ public partial class StatusBarViewModel : MyReactiveObject
         var models = lstModel.Select(it => new ComboItem { ID = it.IndexId, Text = it.GetSummary() }).ToList();
 
         BlServers = true;
-        Servers.ReplaceRange(models);
-
-        // Update the ItemsSource before SelectedItem so a collection reset does not clear the tray selection.
-        SelectedServer = models.FirstOrDefault(it => it.ID == _config.IndexId) ?? new();
+        _refreshingServersMenu = true;
+        try
+        {
+            Servers.ReplaceRange(models);
+            SelectedServer = models.FirstOrDefault(it => it.ID == _config.IndexId) ?? new();
+        }
+        finally
+        {
+            _refreshingServersMenu = false;
+        }
     }
+
+    private bool _refreshingServersMenu;
 
     private void ServerSelectedChanged()
     {
-        if (SelectedServer == null)
+        if (_refreshingServersMenu || SelectedServer == null)
         {
             return;
         }
