@@ -9,6 +9,7 @@ public partial class StatusBarView
 {
     private static Config _config;
     private PultConnectionAppearance? _vaKoLinkTrayAppearance;
+    private System.Drawing.Icon? _vaKoLinkTrayIcon;
 
     public StatusBarView()
     {
@@ -122,9 +123,12 @@ public partial class StatusBarView
         }
 
         var (status, color) = appearance.Tray();
+        System.Drawing.Icon icon;
         if (appearance == PultConnectionAppearance.Off)
         {
-            tbNotify.IconSource = BitmapFrame.Create(new Uri("pack://application:,,,/VaKoLink;component/Resources/VaKoLinkTray.ico"));
+            using var resource = Application.GetResourceStream(
+                new Uri("pack://application:,,,/VaKoLink;component/Resources/VaKoLinkTray.ico")).Stream;
+            icon = new System.Drawing.Icon(resource);
         }
         else
         {
@@ -136,8 +140,37 @@ public partial class StatusBarView
             }
             var rendered = new RenderTargetBitmap(32, 32, 96, 96, PixelFormats.Pbgra32);
             rendered.Render(visual);
-            tbNotify.IconSource = rendered;
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(rendered));
+            using var png = new MemoryStream();
+            encoder.Save(png);
+            using var ico = new MemoryStream();
+            using var writer = new BinaryWriter(ico);
+            writer.Write((ushort)0);
+            writer.Write((ushort)1);
+            writer.Write((ushort)1);
+            writer.Write((byte)32);
+            writer.Write((byte)32);
+            writer.Write((ushort)0);
+            writer.Write((ushort)1);
+            writer.Write((ushort)32);
+            writer.Write((uint)png.Length);
+            writer.Write(22u);
+            png.WriteTo(ico);
+            ico.Position = 0;
+            icon = new System.Drawing.Icon(ico);
         }
+        try
+        {
+            tbNotify.Icon = icon;
+        }
+        catch
+        {
+            icon.Dispose();
+            throw;
+        }
+        _vaKoLinkTrayIcon?.Dispose();
+        _vaKoLinkTrayIcon = icon;
         tbNotify.ToolTipText = $"VaKoLink — {status}";
         _vaKoLinkTrayAppearance = appearance;
     }

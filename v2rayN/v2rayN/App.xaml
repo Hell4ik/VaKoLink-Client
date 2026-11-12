@@ -126,6 +126,8 @@
                 TargetType="{x:Type ContextMenu}">
                 <Setter Property="FontSize" Value="{DynamicResource StdFontSize}" />
                 <Setter Property="FontFamily" Value="{x:Static conv:MaterialDesignFonts.MyFont}" />
+                <Setter Property="Background" Value="{DynamicResource PultCard}" />
+                <Setter Property="Foreground" Value="{DynamicResource PultText}" />
             </Style>
 
             <Style
@@ -211,8 +213,8 @@
                 <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
                 <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
                 <Setter Property="TextOptions.TextHintingMode" Value="Fixed" />
-                <Setter Property="TextElement.Foreground" Value="{DynamicResource MaterialDesignBody}" />
-                <Setter Property="Background" Value="{DynamicResource MaterialDesignPaper}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource PultText}" />
+                <Setter Property="Background" Value="{DynamicResource PultBackground}" />
                 <Setter Property="TextElement.FontFamily" Value="{x:Static conv:MaterialDesignFonts.MyFont}" />
                 <Setter Property="FontFamily" Value="{x:Static conv:MaterialDesignFonts.MyFont}" />
                 <Setter Property="ResizeMode" Value="CanResize" />
@@ -224,8 +226,8 @@
                 <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
                 <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
                 <Setter Property="TextOptions.TextHintingMode" Value="Fixed" />
-                <Setter Property="TextElement.Foreground" Value="{DynamicResource MaterialDesignBody}" />
-                <Setter Property="Background" Value="{DynamicResource MaterialDesignPaper}" />
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource PultText}" />
+                <Setter Property="Background" Value="{DynamicResource PultBackground}" />
                 <Setter Property="TextElement.FontFamily" Value="{x:Static conv:MaterialDesignFonts.MyFont}" />
                 <Setter Property="FontFamily" Value="{x:Static conv:MaterialDesignFonts.MyFont}" />
             </Style>

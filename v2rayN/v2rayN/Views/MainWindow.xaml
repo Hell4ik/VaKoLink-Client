@@ -68,7 +68,7 @@
                                     Style="{StaticResource PultButton}" Content="Проверить обновления" />
                             <Button x:Name="clientUpdateAction" Margin="0,0,8,0" MinWidth="100"
                                     Style="{StaticResource PultButton}" Content="Установить" Visibility="Collapsed" />
-                            <Border Height="42" MinWidth="71" CornerRadius="10" Background="{DynamicResource PultControl}" BorderBrush="{DynamicResource PultControlOutline}" BorderThickness="1"><Menu HorizontalAlignment="Center" Background="Transparent">
+                            <Border Height="42" MinWidth="71" CornerRadius="10" Background="{DynamicResource PultControl}" BorderBrush="{DynamicResource PultControlOutline}" BorderThickness="1"><Menu HorizontalAlignment="Center" Background="Transparent" Foreground="{DynamicResource PultText}">
                                 <MenuItem x:Name="mainMenu" Height="40" Padding="14,0" VerticalContentAlignment="Center" FontSize="14" Header="Меню" FlowDirection="RightToLeft">
                                     <MenuItem Header="Импорт" FlowDirection="LeftToRight">
                                         <MenuItem x:Name="menuAddServerViaClipboard" Header="Из буфера обмена" InputGestureText="Ctrl+V" />
@@ -84,7 +84,6 @@
                                     </MenuItem>
                                     <MenuItem Header="Настройки" FlowDirection="LeftToRight">
                                         <MenuItem x:Name="menuOptionSetting" Header="Расширенные настройки" />
-                                        <MenuItem x:Name="menuNodeEditor" Header="Управление нодами" />
                                         <MenuItem x:Name="menuUpdateViaProxy" Header="Обновлять через прокси" IsCheckable="True" />
                                         <MenuItem x:Name="menuRoutingSetting" Header="Правила маршрутизации" />
                                         <MenuItem x:Name="menuDNSSetting" Header="DNS" />
@@ -135,7 +134,7 @@
                                     <TextBlock VerticalAlignment="Center" FontSize="17" FontWeight="SemiBold" Text="Ноды" />
                                 </DockPanel>
                                 <Grid>
-                                    <ListBox x:Name="nodeList" Visibility="Collapsed" Background="Transparent" BorderThickness="0"
+                                    <ListBox x:Name="nodeList" Visibility="Collapsed" Background="Transparent" BorderThickness="0" SelectionMode="Extended"
                                              ItemContainerStyle="{StaticResource PultNodeRow}" ItemTemplate="{StaticResource PultNode}"
                                              ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                                              VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
@@ -184,7 +183,7 @@
                                                    AutomationProperties.LiveSetting="Polite" Text="Отключено" TextWrapping="Wrap" />
                                     </DockPanel>
                                     <TextBlock Margin="0,0,0,17" FontSize="32" FontWeight="Bold" TextTrimming="CharacterEllipsis"
-                                               Text="{Binding Tag, RelativeSource={RelativeSource Self}, Converter={StaticResource PultNodeLabel}}"
+                                               Text="{Binding Tag, RelativeSource={RelativeSource Self}, Converter={StaticResource PultNodeLabel}, ConverterParameter=Country}"
                                                x:Name="selectedNodeName" />
                                     <DockPanel Margin="0,0,0,6">
                                         <StackPanel x:Name="connectionTimerPanel" DockPanel.Dock="Right" Orientation="Horizontal"
@@ -232,13 +231,12 @@
                     <DockPanel x:Name="advancedPage" Margin="24,18,24,16" Visibility="Collapsed">
                         <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
                             <Button x:Name="backButton" DockPanel.Dock="Right"
-                                    Style="{StaticResource MaterialDesignOutlinedButton}" Content="К подключению" />
+                                    Style="{StaticResource PultButton}" Content="К подключению" />
                             <TextBlock x:Name="advancedTitle" VerticalAlignment="Center" FontSize="22" FontWeight="SemiBold" />
                         </DockPanel>
                         <Grid>
                             <ContentControl x:Name="logHost" Visibility="Collapsed" />
                             <ContentControl x:Name="themeHost" Visibility="Collapsed" />
-                            <ContentControl x:Name="nodeEditorHost" Visibility="Collapsed" />
                         </Grid>
                     </DockPanel>
                     <materialDesign:Snackbar x:Name="MainSnackbar" MessageQueue="{materialDesign:MessageQueue}" />

@@ -29,10 +29,21 @@ public sealed class PultNodeLabelConverter : IValueConverter
     {
         var label = (value as string)?.Trim() ?? "";
         var (code, prefixLength) = ReadPrefix(label);
-        if (parameter is "Flag")
+        if (parameter is "Flag" or "Country")
         {
             code ??= CountryNames.Value.FirstOrDefault(country => label.StartsWith(country.Name, StringComparison.OrdinalIgnoreCase)
                 && (label.Length == country.Name.Length || IsSeparator(label[country.Name.Length]))).Code;
+            if (parameter is "Country")
+            {
+                return code switch
+                {
+                    "us" => "США",
+                    "ae" => "ОАЭ",
+                    "nl" => "Нидерланды",
+                    { } => Countries.Value[code].FirstOrDefault() ?? label,
+                    _ => label.Length > 0 ? label : "Нода не выбрана"
+                };
+            }
             if (code is null)
             {
                 return null!;

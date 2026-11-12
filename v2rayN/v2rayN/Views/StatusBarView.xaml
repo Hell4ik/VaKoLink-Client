@@ -106,7 +106,6 @@
 
         <tb:TaskbarIcon
             x:Name="tbNotify"
-            IconSource="/Resources/VaKoLinkTray.ico"
             NoLeftClickDelay="True"
             ToolTipText="v2rayN">
             <tb:TaskbarIcon.ContextMenu>

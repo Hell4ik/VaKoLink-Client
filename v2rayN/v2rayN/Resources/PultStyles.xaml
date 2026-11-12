@@ -73,7 +73,7 @@
     </Style>
 
     <Style x:Key="PultNodeRow" TargetType="ListBoxItem">
-        <Setter Property="Height" Value="53" />
+        <Setter Property="Height" Value="59" />
         <Setter Property="Margin" Value="0,0,0,5" />
         <Setter Property="Padding" Value="7,0" />
         <Setter Property="Foreground" Value="{DynamicResource PultText}" />
@@ -95,6 +95,16 @@
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="surface" Property="BorderBrush" Value="{DynamicResource PultAccent}" />
                         </Trigger>
+                        <DataTrigger Value="True">
+                            <DataTrigger.Binding>
+                                <MultiBinding Converter="{StaticResource PultActiveNode}">
+                                    <Binding Path="IndexId" />
+                                    <Binding Path="Tag.Item1" RelativeSource="{RelativeSource AncestorType=ListBox}" />
+                                </MultiBinding>
+                            </DataTrigger.Binding>
+                            <Setter TargetName="surface" Property="Background" Value="{DynamicResource PultActiveRow}" />
+                            <Setter TargetName="surface" Property="BorderBrush" Value="{DynamicResource PultConnectedOutline}" />
+                        </DataTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -116,25 +126,6 @@
                 </Grid>
             </Border>
             <DockPanel Grid.Column="1" Margin="8,0,6,0">
-                <TextBlock DockPanel.Dock="Right" Margin="6,0,0,0" VerticalAlignment="Center" Text="✓" FontWeight="SemiBold"
-                           Foreground="{DynamicResource PultGood}" AutomationProperties.Name="Последняя подтверждённая нода">
-                    <TextBlock.Style>
-                        <Style TargetType="TextBlock">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Style.Triggers>
-                                <DataTrigger Value="True">
-                                    <DataTrigger.Binding>
-                                        <MultiBinding Converter="{StaticResource PultActiveNode}">
-                                            <Binding Path="IndexId" />
-                                            <Binding Path="Tag.Item1" RelativeSource="{RelativeSource AncestorType=ListBox}" />
-                                        </MultiBinding>
-                                    </DataTrigger.Binding>
-                                    <Setter Property="Visibility" Value="Visible" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </TextBlock.Style>
-                </TextBlock>
                 <TextBlock DockPanel.Dock="Right" Margin="6,0,0,0" VerticalAlignment="Center" Text="◌"
                            Foreground="{DynamicResource PultAccent}" ToolTip="Подключение…" AutomationProperties.Name="Подключение">
                     <TextBlock.Style>
@@ -154,10 +145,15 @@
                         </Style>
                     </TextBlock.Style>
                 </TextBlock>
-                <TextBlock VerticalAlignment="Center" FontSize="14" TextTrimming="CharacterEllipsis"
-                           ToolTip="{Binding Remarks}" Text="{Binding Remarks, Converter={StaticResource PultNodeLabel}}" />
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock FontSize="14" TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding Remarks}" Text="{Binding Remarks, Converter={StaticResource PultNodeLabel}, ConverterParameter=Country}" />
+                    <TextBlock Margin="0,3,0,0" FontSize="12" Foreground="{DynamicResource PultMuted}"
+                               TextTrimming="CharacterEllipsis" ToolTip="{Binding Address}" Text="{Binding Address}" />
+                </StackPanel>
             </DockPanel>
-            <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="12"
+            <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+                <TextBlock HorizontalAlignment="Right" FontSize="12"
                        Text="{Binding DelayVal, Converter={StaticResource PultDelay}}">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
@@ -175,7 +171,28 @@
                         </Style.Triggers>
                     </Style>
                 </TextBlock.Style>
-            </TextBlock>
+                </TextBlock>
+                <Border HorizontalAlignment="Right" Margin="0,4,0,0" Padding="6,1" CornerRadius="7"
+                        Background="{DynamicResource PultConnectedMode}">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Value="True">
+                                    <DataTrigger.Binding>
+                                        <MultiBinding Converter="{StaticResource PultActiveNode}">
+                                            <Binding Path="IndexId" />
+                                            <Binding Path="Tag.Item1" RelativeSource="{RelativeSource AncestorType=ListBox}" />
+                                        </MultiBinding>
+                                    </DataTrigger.Binding>
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock Foreground="{DynamicResource PultGood}" FontSize="10" FontWeight="SemiBold" Text="● Подключена" />
+                </Border>
+            </StackPanel>
         </Grid>
     </DataTemplate>
 </ResourceDictionary>

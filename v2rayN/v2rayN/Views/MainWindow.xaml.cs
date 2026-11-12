@@ -66,13 +66,12 @@ public partial class MainWindow
         menuLog.Click += (_, _) => ShowAdvanced(logHost, "Журнал");
         menuDiagnostics.Click += (_, _) => ShowDiagnostics();
         menuTheme.Click += (_, _) => ShowAdvanced(themeHost, "Оформление");
-        menuNodeEditor.Click += (_, _) => ShowAdvanced(nodeEditorHost, "Управление нодами");
         menuAbout.Click += (_, _) => MessageBox.Show(this, Title,
             "О программе", MessageBoxButton.OK, MessageBoxImage.Information);
         menuBackupAndRestore.Click += MenuBackupAndRestore_Click;
+        SetupPultNodeMenu();
         backButton.Click += (_, _) =>
         {
-            SetNodeEditorGroups(false);
             advancedPage.Visibility = Visibility.Collapsed;
             connectionPage.Visibility = Visibility.Visible;
         };
@@ -110,6 +109,12 @@ public partial class MainWindow
 
             this.OneWayBind(ViewModel, vm => vm.ProfilesViewModel.ProfileItems, v => v.nodeList.ItemsSource).DisposeWith(disposables);
             this.Bind(ViewModel, vm => vm.ProfilesViewModel.SelectedProfile, v => v.nodeList.SelectedItem).DisposeWith(disposables);
+            var profiles = ViewModel.ProfilesViewModel;
+            profiles.ShowYesNoInteraction.RegisterHandler(interaction =>
+            {
+                interaction.SetOutput(MessageBox.Show(this, interaction.Input, "VaKoLink",
+                    MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes);
+            }).DisposeWith(disposables);
 
             if (logHost.Content is null)
             {
@@ -286,7 +291,7 @@ public partial class MainWindow
             connectionButton.Content = connection.NeedsDisconnect && !connection.IsConnecting ? "Отключить" : "Подключить";
             connectionStatus.Text = connection.IsSwitchingNode ? "Переподключение…" : connection.Status;
             nodeList.Tag = Tuple.Create(
-                connection.IsSwitchingNode ? connection.SwitchingFromNodeId : connection.ConnectedNodeId,
+                connection.ConnectedNodeId,
                 connection.IsSwitchingNode ? connection.SwitchingToNodeId : null);
             connectionNotice.Text = connection.SwitchNotice ?? string.Empty;
             connectionNotice.Visibility = connection.SwitchNotice is null ? Visibility.Collapsed : Visibility.Visible;
@@ -636,27 +641,11 @@ public partial class MainWindow
         {
             themeHost.Content ??= new ThemeSettingView(ThemeSettings);
         }
-        if (content == nodeEditorHost && nodeEditorHost.Content is null)
-        {
-            ViewHost.Show(nodeEditorHost, ViewModel.ProfilesViewModel);
-        }
-        SetNodeEditorGroups(content == nodeEditorHost);
         advancedTitle.Text = title;
         logHost.Visibility = content == logHost ? Visibility.Visible : Visibility.Collapsed;
         themeHost.Visibility = content == themeHost ? Visibility.Visible : Visibility.Collapsed;
-        nodeEditorHost.Visibility = content == nodeEditorHost ? Visibility.Visible : Visibility.Collapsed;
         connectionPage.Visibility = Visibility.Collapsed;
         advancedPage.Visibility = Visibility.Visible;
-    }
-
-    private void SetNodeEditorGroups(bool show)
-    {
-        var profiles = ViewModel.ProfilesViewModel;
-        if (profiles.ShowNodeEditorGroups != show)
-        {
-            profiles.ShowNodeEditorGroups = show;
-            _ = profiles.RefreshServers();
-        }
     }
 
     private void OnProgramStarted(object state, bool timeout)

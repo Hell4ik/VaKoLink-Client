@@ -22,7 +22,6 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
     public bool Busy { get; private set; }
     public bool IsConnecting { get; private set; }
     public bool IsSwitchingNode { get; private set; }
-    public string? SwitchingFromNodeId { get; private set; }
     public string? SwitchingToNodeId { get; private set; }
     public string? SwitchNotice { get; private set; }
     public string? DiagnosticFailure { get; private set; }
@@ -157,7 +156,6 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
 
     private async Task ReplaceConnectionAsync(ProfileItem target, ProfileItem previous)
     {
-        SwitchingFromNodeId = previous.IndexId;
         SwitchingToNodeId = target.IndexId;
         IsSwitchingNode = true;
         Changed?.Invoke();
@@ -349,7 +347,6 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
             }
             IsConnecting = false;
             IsSwitchingNode = false;
-            SwitchingFromNodeId = null;
             SwitchingToNodeId = null;
             Busy = false;
             _transition.Release();

@@ -33,6 +33,7 @@ internal static class PultTheme
         Set("Control", 0x192B40, 0xE8F1FA);
         Set("ControlOutline", 0x35536D, 0xACC5DC);
         Set("Selected", 0x143653, 0xD6EAFA);
+        Set("ActiveRow", 0x17342F, 0xE5F5EC);
         Set("ModeTrack", 0x0F1929, 0xF0F4F9);
         Set("ConnectAction", 0x0977A9, 0x096E9B);
         Set("ConnectActionOutline", 0x29B8F4, 0x096E9B);
@@ -44,5 +45,13 @@ internal static class PultTheme
         Set("Good", 0x87E5BE, 0x146847);
         Set("Medium", 0xFFD274, 0x855100);
         Set("Bad", 0xFF99AA, 0xA42643);
+
+        resources["MaterialDesign.Brush.Background"] = resources["PultBackground"];
+        resources["MaterialDesign.Brush.Foreground"] = resources["PultText"];
+        resources["MaterialDesign.Brush.Card.Background"] = resources["PultCard"];
+        resources["MaterialDesign.Brush.Menu.Background"] = resources["PultCard"];
+        resources["MaterialDesign.Brush.Selection"] = resources["PultSelected"];
+        resources["MaterialDesignPaper"] = resources["PultBackground"];
+        resources["MaterialDesignBody"] = resources["PultText"];
     }
 }
