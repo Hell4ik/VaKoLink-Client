@@ -104,6 +104,7 @@
                             </DataTrigger.Binding>
                             <Setter TargetName="surface" Property="Background" Value="{DynamicResource PultActiveRow}" />
                             <Setter TargetName="surface" Property="BorderBrush" Value="{DynamicResource PultConnectedOutline}" />
+                            <Setter Property="AutomationProperties.ItemStatus" Value="Подключена" />
                         </DataTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -152,8 +153,7 @@
                                TextTrimming="CharacterEllipsis" ToolTip="{Binding Address}" Text="{Binding Address}" />
                 </StackPanel>
             </DockPanel>
-            <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
-                <TextBlock HorizontalAlignment="Right" FontSize="12"
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" FontSize="12"
                        Text="{Binding DelayVal, Converter={StaticResource PultDelay}}">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
@@ -171,28 +171,7 @@
                         </Style.Triggers>
                     </Style>
                 </TextBlock.Style>
-                </TextBlock>
-                <Border HorizontalAlignment="Right" Margin="0,4,0,0" Padding="6,1" CornerRadius="7"
-                        Background="{DynamicResource PultConnectedMode}">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Style.Triggers>
-                                <DataTrigger Value="True">
-                                    <DataTrigger.Binding>
-                                        <MultiBinding Converter="{StaticResource PultActiveNode}">
-                                            <Binding Path="IndexId" />
-                                            <Binding Path="Tag.Item1" RelativeSource="{RelativeSource AncestorType=ListBox}" />
-                                        </MultiBinding>
-                                    </DataTrigger.Binding>
-                                    <Setter Property="Visibility" Value="Visible" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <TextBlock Foreground="{DynamicResource PultGood}" FontSize="10" FontWeight="SemiBold" Text="● Подключена" />
-                </Border>
-            </StackPanel>
+            </TextBlock>
         </Grid>
     </DataTemplate>
 </ResourceDictionary>

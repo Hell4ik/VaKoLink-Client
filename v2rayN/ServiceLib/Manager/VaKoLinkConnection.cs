@@ -13,6 +13,7 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
     private bool _connected;
     private long? _connectedAt;
     private ProfileItem? _connectedProfile;
+    private string? _connectedRowId;
     private bool _restartingTransport;
     private CancellationTokenSource? _monitor;
     private string _diagnosticStage = "Подключение";
@@ -29,8 +30,9 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
     public bool UseTun => config.VaKoLinkUseTun;
     public bool IsConnected => _connected;
     public TimeSpan? ConnectionDuration => _connectedAt is { } started ? Stopwatch.GetElapsedTime(started) : null;
-    public string? ConnectedNodeId => _connectedProfile?.IndexId;
+    public string? ConnectedNodeId => _connectedRowId;
     public string? ConnectedNodeName => _connectedProfile?.Remarks;
+    public string? ConnectedSubscriptionId => _connectedProfile?.Subid;
     public int? ConnectedProxyPort { get; private set; }
     public CancellationToken ConnectedSessionToken { get; private set; }
     public bool IsProxyReady => _connected && !UseTun && (!Busy || _restartingTransport) && !_closing;
@@ -139,9 +141,35 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
         await ReplaceConnectionAsync(profile, previous);
     });
 
+    internal async Task RefreshConnectedSubscriptionRowAsync()
+    {
+        await _transition.WaitAsync();
+        try
+        {
+            if (_connectedProfile is not { Subid.Length: > 0 } previous)
+            {
+                return;
+            }
+            var profiles = await AppManager.Instance.ProfileItems(previous.Subid);
+            var matched = profiles?.FirstOrDefault(item =>
+                item.IndexId == config.VaKoLinkResume?.NodeId &&
+                ConfigHandler.CompareProfileItem(item, previous, remarks: false))
+                ?? profiles?.FirstOrDefault(item => ConfigHandler.CompareProfileItem(item, previous, remarks: true));
+            if (_connectedRowId != matched?.IndexId)
+            {
+                _connectedRowId = matched?.IndexId;
+                Changed?.Invoke();
+            }
+        }
+        finally
+        {
+            _transition.Release();
+        }
+    }
+
     public Task SwitchNodeAsync(string nodeId) => TransitionAsync(async () =>
     {
-        if (_connectedProfile is not { } previous || nodeId == previous.IndexId)
+        if (_connectedProfile is not { } previous || nodeId == ConnectedNodeId)
         {
             return;
         }
@@ -459,6 +487,7 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
         _monitor = new();
         ConnectedSessionToken = _monitor.Token;
         _connectedProfile = profile;
+        _connectedRowId = profile.IndexId;
         _connected = true;
         _connectedAt ??= Stopwatch.GetTimestamp();
         IsConnecting = false;
@@ -482,6 +511,7 @@ public sealed class VaKoLinkConnection(Config config, bool launchedAtLogon = fal
             _connectedAt = null;
         }
         _connectedProfile = null;
+        _connectedRowId = null;
         ConnectedProxyPort = null;
         ConnectedSessionToken = default;
         try

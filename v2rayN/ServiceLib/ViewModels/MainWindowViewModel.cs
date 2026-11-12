@@ -337,7 +337,7 @@ public partial class MainWindowViewModel : MyReactiveObject
         await ProfileExManager.Instance.Init();
         await CoreManager.Instance.Init(_config, UpdateHandler);
         await CertPemManager.Instance.Init(_config);
-        TaskManager.Instance.RegUpdateTask(_config, UpdateTaskHandler);
+        TaskManager.Instance.RegUpdateTask(_config, SubscriptionUpdateHandler);
 
         if (_config.GuiItem.EnableStatistics || _config.GuiItem.DisplayRealTimeSpeed)
         {
@@ -367,6 +367,21 @@ public partial class MainWindowViewModel : MyReactiveObject
             NoticeManager.Instance.Enqueue(msg);
         }
         await Task.CompletedTask;
+    }
+
+    private async Task SubscriptionUpdateHandler(bool success, string msg)
+    {
+        if (OperatingSystem.IsWindows() && AppManager.Instance.ConnectionModes is { } connection)
+        {
+            NoticeManager.Instance.SendMessageEx(msg);
+            if (success)
+            {
+                await connection.RefreshConnectedSubscriptionRowAsync();
+                await RefreshServersDispatcherAsync();
+            }
+            return;
+        }
+        await UpdateTaskHandler(success, msg);
     }
 
     private async Task UpdateTaskHandler(bool success, string msg)
@@ -590,7 +605,7 @@ public partial class MainWindowViewModel : MyReactiveObject
 
     public async Task UpdateSubscriptionProcess(string subId, bool blProxy)
     {
-        await Task.Run(async () => await SubscriptionHandler.UpdateProcess(_config, subId, blProxy, UpdateTaskHandler));
+        await Task.Run(async () => await SubscriptionHandler.UpdateProcess(_config, subId, blProxy, SubscriptionUpdateHandler));
     }
 
     #endregion Subscription

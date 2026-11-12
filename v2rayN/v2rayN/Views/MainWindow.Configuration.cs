@@ -88,15 +88,15 @@ public partial class MainWindow
         SubItem? item = null;
         try
         {
-            if (manager.ConnectionModes?.ConnectedNodeId is { } connectedId)
+            if (manager.ConnectionModes is { IsConnected: true } connection)
             {
-                id = (await manager.GetProfileItem(connectedId))?.Subid;
+                id = connection.ConnectedSubscriptionId;
             }
             if (!string.IsNullOrEmpty(id))
             {
                 item = await manager.GetSubItem(id);
             }
-            else if (selected is null && manager.ConnectionModes?.ConnectedNodeId is null)
+            else if (selected is null && manager.ConnectionModes is not { IsConnected: true })
             {
                 var configurations = (await manager.SubItems() ?? []).Where(sub => sub.Enabled && Supports(sub)).Take(2).ToArray();
                 item = configurations is [var only] ? only : null;
