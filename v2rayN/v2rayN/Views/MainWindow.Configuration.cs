@@ -166,7 +166,7 @@ public partial class MainWindow
         trafficMeter.Value = used.HasValue && limit is > 0 ? Math.Clamp(100d * used.Value / limit.Value, 0, 100) : 0;
         refreshTrafficButton.IsEnabled = available && !_refreshingTraffic &&
             AppManager.Instance.ConnectionModes is { Ready: true };
-        refreshTrafficButton.Content = _refreshingTraffic ? "Обновляем…" : "Обновить расход";
+        refreshTrafficButton.Content = _refreshingTraffic ? "Обновляем…" : "Обновить расход трафика";
 
         var freshness = item?.VaKoLinkTrafficCheckedAt is { } checkedAt
             ? FormatTrafficTime(checkedAt) : null;
