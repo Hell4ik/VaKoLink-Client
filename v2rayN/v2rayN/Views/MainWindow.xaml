@@ -56,16 +56,11 @@
             <DockPanel Background="{DynamicResource PultBackground}" TextElement.Foreground="{DynamicResource PultText}">
                 <Border DockPanel.Dock="Top" Padding="19,10" Background="{DynamicResource PultHeader}" BorderBrush="{DynamicResource PultOutline}" BorderThickness="0,0,0,1">
                     <DockPanel LastChildFill="True">
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <StackPanel x:Name="updateProgressPanel" Width="145" Margin="0,0,12,0"
-                                        VerticalAlignment="Center" Visibility="Collapsed">
-                                <TextBlock x:Name="updatePercent" FontWeight="SemiBold" TextAlignment="Right" />
-                                <TextBlock x:Name="updateStage" Opacity="0.8" TextAlignment="Right" TextTrimming="CharacterEllipsis"
-                                           ToolTip="{Binding RelativeSource={RelativeSource Self}, Path=Text}" />
-                            </StackPanel>
+                        <StackPanel DockPanel.Dock="Right" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                             <Button x:Name="checkUpdateButton" Margin="0,0,8,0"
                                     MinWidth="193"
-                                    Style="{StaticResource PultButton}" Content="Проверить обновления" />
+                                    Style="{StaticResource PultButton}" Content="Проверить обновления VaKoLink" />
                             <Button x:Name="clientUpdateAction" Margin="0,0,8,0" MinWidth="100"
                                     Style="{StaticResource PultButton}" Content="Установить" Visibility="Collapsed" />
                             <Border Height="42" MinWidth="71" CornerRadius="10" Background="{DynamicResource PultControl}" BorderBrush="{DynamicResource PultControlOutline}" BorderThickness="1"><Menu HorizontalAlignment="Center" Background="Transparent" Foreground="{DynamicResource PultText}">
@@ -101,6 +96,13 @@
                                     </MenuItem>
                                 </MenuItem>
                             </Menu></Border>
+                            </StackPanel>
+                            <StackPanel x:Name="updateProgressPanel" Width="245" Margin="0,4,0,0"
+                                        HorizontalAlignment="Right" Visibility="Collapsed">
+                                <TextBlock x:Name="updatePercent" FontWeight="SemiBold" TextAlignment="Right" />
+                                <TextBlock x:Name="updateStage" Opacity="0.8" TextAlignment="Right" TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding RelativeSource={RelativeSource Self}, Path=Text}" />
+                            </StackPanel>
                         </StackPanel>
                         <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
                             <TextBlock x:Name="configurationStatus" FontWeight="SemiBold" TextWrapping="Wrap" Text="Статус конфигурации — Нет данных" />
@@ -124,11 +126,11 @@
                             <DockPanel>
                                 <DockPanel DockPanel.Dock="Top" Margin="5,0,5,10">
                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                        <Button x:Name="updateSubscriptionsButton" Width="91" Height="34" Margin="0,0,6,0" Padding="4,0"
-                                                FontSize="12" Style="{StaticResource PultButton}" Content="Обновить"
+                                        <Button x:Name="updateSubscriptionsButton" Width="128" Height="34" Margin="0,0,6,0" Padding="4,0"
+                                                FontSize="12" Style="{StaticResource PultButton}" Content="Обновить список нод"
                                                 ToolTip="Обновить все включённые подписки без прокси" />
-                                        <Button x:Name="measureLatencyButton" Width="96" Height="34" Padding="4,0"
-                                                FontSize="12" Style="{StaticResource PultButton}" Content="Задержка ↻" Click="MeasureLatencyButton_Click"
+                                        <Button x:Name="measureLatencyButton" MinWidth="76" Height="34" Padding="4,0"
+                                                FontSize="12" Style="{StaticResource PultButton}" Content="Пинг" Click="MeasureLatencyButton_Click"
                                                 ToolTip="Измерить задержку всех нод" />
                                     </StackPanel>
                                     <TextBlock VerticalAlignment="Center" FontSize="17" FontWeight="SemiBold" Text="Ноды" />
@@ -154,8 +156,8 @@
                                 <StackPanel>
                                     <DockPanel>
                                         <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right" Margin="12,0,0,0">
-                                            <Button x:Name="refreshTrafficButton" HorizontalAlignment="Right" MinWidth="116" Height="32"
-                                                    Padding="7,0" FontSize="12" Style="{StaticResource PultButton}" Content="Обновить расход" />
+                                            <Button x:Name="refreshTrafficButton" HorizontalAlignment="Right" MinWidth="148" Height="32"
+                                                    Padding="6,0" FontSize="12" Style="{StaticResource PultButton}" Content="Обновить расход трафика" />
                                             <TextBlock x:Name="trafficFreshness" HorizontalAlignment="Right" Margin="0,4,0,0"
                                                        Foreground="{DynamicResource PultMuted}" FontSize="11"
                                                        MaxWidth="155" TextAlignment="Right" TextWrapping="Wrap"

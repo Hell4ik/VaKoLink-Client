@@ -96,7 +96,7 @@ public partial class MainWindow
             this.BindCommand(ViewModel, vm => vm.SubUpdateCmd, v => v.updateSubscriptionsButton).DisposeWith(disposables);
             ViewModel.SubUpdateCmd.IsExecuting
                 .ObserveOn(RxSchedulers.MainThreadScheduler)
-                .Subscribe(updating => updateSubscriptionsButton.Content = updating ? "Обновляем…" : "Обновить")
+                .Subscribe(updating => updateSubscriptionsButton.Content = updating ? "Обновляем…" : "Обновить список нод")
                 .DisposeWith(disposables);
             this.BindCommand(ViewModel, vm => vm.SubUpdateViaProxyCmd, v => v.menuSubUpdateViaProxy).DisposeWith(disposables);
             this.BindCommand(ViewModel, vm => vm.SubGroupUpdateCmd, v => v.menuSubGroupUpdate).DisposeWith(disposables);
@@ -392,7 +392,7 @@ public partial class MainWindow
         finally
         {
             _latencyCancellation = null;
-            measureLatencyButton.Content = "Задержка ↻";
+            measureLatencyButton.Content = "Пинг";
             UpdateNodeControls();
         }
     }
