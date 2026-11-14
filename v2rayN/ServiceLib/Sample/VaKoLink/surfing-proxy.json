@@ -11,6 +11,29 @@
     "remarks": "LAN / Private -> DIRECT"
   },
   {
+    "outboundTag": "proxy",
+    "domain": [
+      "domain:autocad.com",
+      "domain:autocad360.com",
+      "full:www.autodesk.com",
+      "full:accounts.autodesk.com",
+      "full:access.clic.autodesk.com",
+      "full:ase.autodesk.com",
+      "full:ase-cdn.autodesk.com",
+      "full:api.csl.autodesk.com",
+      "full:developer.api.autodesk.com",
+      "full:api.aps.usa.autodesk.com",
+      "full:adppa.api.autodesk.com",
+      "full:cfp-mfe-prd.autodesk.com",
+      "full:prd-cfp.autodesk.com",
+      "full:help.autodesk.com",
+      "full:utility-service.assist-p-ue1.cloudos.autodesk.com",
+      "full:unified-registry-service.assist-p-ue1.cloudos.autodesk.com"
+    ],
+    "enabled": true,
+    "remarks": "AutoCAD online -> PROXY"
+  },
+  {
     "outboundTag": "direct",
     "domain": [
       "domain:office.com",
