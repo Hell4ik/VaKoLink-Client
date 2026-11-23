@@ -247,6 +247,8 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare, F
             "Файлы приложения изменились. Запустите маршрутизацию заново для повторной проверки.",
         "TUN_NON_TUN_ADDRESS_CHANGED" =>
             "При запуске маршрутизации изменились IP-адреса другого сетевого интерфейса. Дождитесь стабилизации сети и попробуйте снова.",
+        { } value when value.StartsWith("TUN_IPV6_GUARD_", StringComparison.Ordinal) =>
+            "Windows не смогла ограничить прямой IPv6-трафик выбранных приложений. Сохраните отчёт в «Диагностике».",
         "TUN_NON_TUN_DNS_CHANGED" or "TUN_NON_TUN_INTERFACE_CHANGED" or "TUN_NON_TUN_ADAPTER_CHANGED" or
         "TUN_NON_TUN_ROUTE_CHANGED" or "TUN_BASELINE_NOT_SETTLED" =>
             "Сетевые настройки изменились во время запуска Transport. Дождитесь стабилизации сети и попробуйте снова.",

@@ -47,6 +47,7 @@ public sealed class ProxyTunSession : IAsyncDisposable
     private readonly IReadOnlyList<DiscordComponentPin> _discord;
     private readonly IReadOnlyList<SelectedTransportImage> _selectedImages;
     private readonly HashSet<string> _selectedPaths;
+    private ApplicationIpv6Guard? _ipv6Guard;
     private readonly List<FileStream> _selectedLocks = [];
     private readonly List<FileStream> _discordLocks = []; private int _discordProbePort; private MediaTimeline? _media;
     private Task? _discordProbeTask; private DateTimeOffset _lastDiscordProbe, _lastMedia, _lastIdentity;
@@ -181,13 +182,22 @@ public sealed class ProxyTunSession : IAsyncDisposable
                     _media.Record("ProfileStarted", new { Profile = DiscordMediaProfile.Id, SystemProxyEnabled = (int?)_baseline["Proxy"]?["Enable"] == 1, Evidence = DiscordEvidence, Processes = DiscordMediaProfile.ProcessEvidence(_discord) });
                 }
             }
-            var config = ProxyTunPlan.Build(_localProxy, _main?.ExecutablePath, physical, loopback, ProxyTunPlan.ChooseAddress(_baseline), _apiPort, _apiSecret, _probePort, ProxyTunPlan.ChooseIpv6Address(_baseline), _discord, _discordProbePort, _selectedPaths.ToArray());
+            bool ipv4Only = _selectedPaths.Count > 0 && _main is null && _discord.Count == 0
+                && TeredoTransitionPolicy.HasDefaultRoute(_baseline);
+            var config = ProxyTunPlan.Build(_localProxy, _main?.ExecutablePath, physical, loopback, ProxyTunPlan.ChooseAddress(_baseline),
+                _apiPort, _apiSecret, _probePort, ipv4Only ? "" : ProxyTunPlan.ChooseIpv6Address(_baseline),
+                _discord, _discordProbePort, _selectedPaths.ToArray(), ipv4Only);
             _plan = config;
             _config = Path.Combine(_operation, "run-config.json"); await File.WriteAllTextAsync(_config, config.ToJsonString()); ConfigurationSha256 = AionTunPlan.FileHash(_config);
             TunPrivateStore.WriteProtected(Path.Combine(_operation, "configuration.dpapi"), config.ToJsonString());
             await CheckAsync(_config);
             _localProxy.VerifyAlive(); VerifyListenerPresent();
             Event("ConfigurationCheckPassed");
+            if (ipv4Only)
+            {
+                _ipv6Guard = new ApplicationIpv6Guard(_selectedPaths);
+                Event("ApplicationIpv6GuardActive");
+            }
             if (_observe && Observer is not null) await Observer.StartAsync(_engine, CancellationToken.None);
             Event(_observe ? "PassiveObserverStarted" : "TransportOnly_NoWinDivert");
             _child = new(); _child.Start(_config); _pid = _child.Process.Id; _created = true; _stderrStatus = "PrivateCaptureActive"; Event("CoreProcessCreatedAndResumed");
@@ -215,14 +225,19 @@ public sealed class ProxyTunSession : IAsyncDisposable
                 int ownIndex = (int)own[0]!["InterfaceIndex"]!;
                 if (snapshot == 1) Event("TunAdapterObserved");
                 var ownRoutes = active["Routes"]!.AsArray().Where(r => (int?)r?["InterfaceIndex"] == ownIndex).ToArray();
-                if (ownRoutes.Length == 0 || !ownRoutes.Any(r => PrefixMatches("2606:4700::1111", (string?)r?["DestinationPrefix"]))
-                    || !ownRoutes.Any(r => PrefixMatches("1.1.1.1", (string?)r?["DestinationPrefix"]))) throw new IOException("TUN_ROUTES_NOT_OBSERVED");
+                if (!ownRoutes.Any(r => PrefixMatches("1.1.1.1", (string?)r?["DestinationPrefix"]))
+                    || (!ipv4Only && !ownRoutes.Any(r => PrefixMatches("2606:4700::1111", (string?)r?["DestinationPrefix"]))))
+                    throw new IOException("TUN_ROUTES_NOT_OBSERVED");
                 var check = ProxyNetworkIsolation.Evaluate(_baseline, active, ownIndex, _localProxy.Host, snapshot, _lifecycleClock.ElapsedMilliseconds);
                 lock (_gate) _isolation.Add(check);
                 _excluded = check.Predicates.Single(p => p.Id == "LOCAL_PROXY_ROUTE_EXCLUDED").Passed;
                 _proxy = check.Predicates.Single(p => p.Id == "SYSTEM_PROXY_UNCHANGED").Passed;
                 Event(check.Passed ? "StartupIsolationPassed" : "StartupIsolationMismatch_" + check.FailureCode);
-                if (check.Passed) break;
+                if (check.Passed)
+                {
+                    if (ipv4Only && snapshot < ProxyNetworkIsolation.MaximumStartupSnapshots) continue;
+                    break;
+                }
                 // Never wait on a possible proxy loop, reused index, proxy change or firewall change.
                 if (!ProxyNetworkIsolation.CanRecheck(check)) throw new IOException(check.FailureCode);
             }
@@ -402,14 +417,21 @@ public sealed class ProxyTunSession : IAsyncDisposable
             if (_created && _child?.Process.HasExited == true) { _termination = "CoreSelfExitBeforeControllerStop"; Event("CoreAlreadyExited"); }
             if (_created && _termination == "NotStarted") _termination = "ControllerRequestedStop";
             Event("CleanupStarted");
+            bool archiveCoreOutput = _child is not null;
             if (_child is not null)
             {
                 await _child.StopAsync(); _graceful = _child.GracefulSignal; _forced = _child.Forced;
                 _exited = _created && _child.Process.HasExited; if (_exited) _exitCode = _child.Process.ExitCode;
                 _child.Dispose(); _child = null;
                 _running = false;
-                await ProtectCoreOutputAsync();
             }
+            if (_ipv6Guard is not null)
+            {
+                _ipv6Guard.Dispose();
+                _ipv6Guard = null;
+                Event("ApplicationIpv6GuardRemoved");
+            }
+            if (archiveCoreOutput) await ProtectCoreOutputAsync();
             if (Observer is not null) await Observer.StopAsync();
             var observerClean = Observer?.Evidence.Native.RollbackCompleted ?? true;
             _api?.Dispose(); _api = null;

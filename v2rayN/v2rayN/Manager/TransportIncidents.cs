@@ -40,6 +40,7 @@ internal static class TransportIncidents
             "AION_SIGNATURE_NOT_TRUSTED" or "TUN_AION_SIGNATURE_UNTRUSTED" => "GAME_SIGNATURE_UNTRUSTED",
             "VOICE_NOT_INSTALLED" or "VOICE_EXECUTABLE_MISSING" or "VOICE_SIGNATURE_UNTRUSTED" => code,
             "TUN_NON_TUN_ADDRESS_CHANGED" => "EXTERNAL_ADDRESS_CHANGED",
+            { } value when value.StartsWith("TUN_IPV6_GUARD_", StringComparison.Ordinal) => value,
             "TUN_NON_TUN_ADAPTER_CHANGED" or "TUN_NON_TUN_ROUTE_CHANGED" or "TUN_NON_TUN_DNS_CHANGED" or
                 "TUN_NON_TUN_INTERFACE_CHANGED" or "TUN_BASELINE_NOT_SETTLED" or "TUN_SYSTEM_PROXY_CHANGED" or
                 "TUN_FIREWALL_PROFILES_CHANGED" or "TUN_LOCAL_PROXY_ROUTE_NOT_EXCLUDED" => code,
@@ -60,6 +61,7 @@ internal static class TransportIncidents
                 "PROFILES_UNAVAILABLE" or "OBSERVER_SCOPE_INVALID" or "SELECTED_APPLICATIONS_REQUIRED" or "SELECTED_APPLICATION_MISSING" or
                     "SELECTED_APPLICATION_UNTRUSTED" or "SELECTED_APPLICATION_CHANGED" => "Проверка приложений",
                 "EXTERNAL_ADDRESS_CHANGED" => "Изоляция сети",
+                _ when safe.StartsWith("TUN_IPV6_GUARD_", StringComparison.Ordinal) => "Изоляция IPv6",
                 _ when safe.StartsWith("TUN_NON_TUN_", StringComparison.Ordinal) || safe == "TUN_LOCAL_PROXY_ROUTE_NOT_EXCLUDED" => "Изоляция сети",
                 _ when safe.Contains("UDP", StringComparison.Ordinal) => "Проверка UDP",
                 "PROXY_TCP_RESPONSE_TIMEOUT" => "Проверка TCP",

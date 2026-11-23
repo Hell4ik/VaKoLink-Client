@@ -26,8 +26,9 @@ public static class ProxyCleanupPolicy
             (string?)tun[0]?["dns_mode"] != "disabled" || (bool?)tun[0]?["strict_route"] != false)
             blockers.Add("TUN_RECOVERY_PLAN_UNVERIFIED");
         string[] prefixes = tun.Length == 1 ? tun[0]?["address"]?.AsArray().Select(n => (string)n!).ToArray() ?? [] : [];
-        bool prefixesValid = prefixes.Length == 2 && prefixes.All(ValidPrivatePrefix);
-        prefixesValid = prefixesValid && prefixes.Select(p => p.Contains(':')).Distinct().Count() == 2;
+        bool ipv4Only = prefixes.Length == 1 && !prefixes[0].Contains(':');
+        bool prefixesValid = (ipv4Only || prefixes.Length == 2 && prefixes.Select(p => p.Contains(':')).Distinct().Count() == 2)
+            && prefixes.All(ValidPrivatePrefix);
         if (!prefixesValid) blockers.Add("TUN_RECOVERY_ADDRESS_PLAN_UNVERIFIED");
         if (Rows(baseline, "Adapters").Any(n => (string?)n["Name"] == ProxyTunPlan.AdapterName)) blockers.Add("TUN_BASELINE_OWN_ADAPTER_ALREADY_PRESENT");
         if (Rows(current, "Adapters").Any(n => (string?)n["Name"] == ProxyTunPlan.AdapterName)) blockers.Add("TUN_OWN_ADAPTER_REMAINS");
@@ -47,7 +48,8 @@ public static class ProxyCleanupPolicy
                 ownership = !InterfaceKeys.Any(key => Rows(baseline, key).Any(n => (int?)n["InterfaceIndex"] == ownIndex));
                 if (!ownership) blockers.Add("TUN_OWN_INDEX_NOT_NEW_AT_START");
                 if (prefixesValid && Rows(during, "Addresses").Any(n => (int?)n["InterfaceIndex"] == ownIndex
-                    && !prefixes.Any(p => ProxyTunSession.PrefixMatches((string)n["IPAddress"]!, p))))
+                    && !prefixes.Any(p => ProxyTunSession.PrefixMatches((string)n["IPAddress"]!, p))
+                    && !(ipv4Only && IsAutomaticLinkLocal(n))))
                 { ownership = false; blockers.Add("TUN_CAPTURED_ADDRESS_PLAN_MISMATCH"); }
                 foreach (string key in InterfaceKeys)
                     if (Rows(current, key).Any(n => (int?)n["InterfaceIndex"] == ownIndex)) blockers.Add("TUN_OWN_INDEX_REMAINS_" + key.ToUpperInvariant());
@@ -94,6 +96,9 @@ public static class ProxyCleanupPolicy
             && inputs.OfType<JsonObject>().Where(n => (string?)n["type"] != "tun").All(n => (string?)n["type"] == "socks" && (string?)n["listen"] == "127.0.0.1");
     }
     private static IEnumerable<JsonObject> Rows(JsonObject snapshot, string key) => snapshot[key]!.AsArray().Select(n => n!.AsObject());
+    private static bool IsAutomaticLinkLocal(JsonObject row) => row.Count == 5 && (int?)row["AddressFamily"] == 23
+        && (int?)row["PrefixOrigin"] == 2 && (int?)row["PrefixLength"] == 64
+        && IPAddress.TryParse((string?)row["IPAddress"], out var address) && address.IsIPv6LinkLocal;
     private static bool ValidPrivatePrefix(string prefix)
     {
         var p = prefix.Split('/'); if (p.Length != 2 || !IPAddress.TryParse(p[0], out var ip)) return false;

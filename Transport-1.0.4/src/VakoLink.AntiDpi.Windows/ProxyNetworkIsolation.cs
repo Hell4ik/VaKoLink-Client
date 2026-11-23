@@ -92,8 +92,10 @@ public static class ProxyNetworkIsolation
             if (perInterface)
             { before = WithoutInterface(before, own); after = WithoutInterface(after, own); }
             bool rawEqual = Equivalent(before, after);
+            var applicableTeredo = category is "Addresses" or "Routes" ? teredo
+                : teredo.Where(transition => transition.ReasonCode != "VERIFIED_TEREDO_ADDRESS_ROTATION").ToArray();
             bool passed = category == "DNS" ? EquivalentDnsServers(before, after) : perInterface
-                ? Equivalent(TeredoTransitionPolicy.Excluding(before, own, teredo), TeredoTransitionPolicy.Excluding(after, own, teredo)) : rawEqual;
+                ? Equivalent(TeredoTransitionPolicy.Excluding(before, own, applicableTeredo), TeredoTransitionPolicy.Excluding(after, own, applicableTeredo)) : rawEqual;
             var changes = rawEqual ? [] : Differences(before, after);
             predicates.Add(new(id, passed, rawEqual ? "PASSED" : !passed ? "SNAPSHOT_CONTENT_CHANGED" : category == "DNS"
                 ? "EMPTY_DNS_PLACEHOLDER_ROWS_CHANGED" : "VERIFIED_TEREDO_AUTOMATIC_LIFECYCLE",

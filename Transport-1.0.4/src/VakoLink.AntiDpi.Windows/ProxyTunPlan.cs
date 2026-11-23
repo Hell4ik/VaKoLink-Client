@@ -32,7 +32,7 @@ public static class ProxyTunPlan
         throw new IOException("TUN_NO_FREE_IPV6_RANGE");
     }
     public static JsonObject Build(LocalProxyEndpoint proxy, string? main, string physical, string loopback, string address, int api, string secret, int probe = 0, string ipv6 = "fd94:61e9:10::1/126", IReadOnlyList<DiscordComponentPin>? discord = null, int discordProbe = 0,
-        IReadOnlyList<string>? selectedApplications = null)
+        IReadOnlyList<string>? selectedApplications = null, bool ipv4Only = false)
     {
         var applications = (selectedApplications ?? []).Concat(main is null ? [] : [main])
             .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -45,7 +45,8 @@ public static class ProxyTunPlan
             new JsonObject { ["port"] = new JsonArray(53), ["action"] = "route", ["outbound"] = "direct" },
             new JsonObject { ["ip_is_private"] = true, ["action"] = "route", ["outbound"] = "direct" });
         var inbound = new JsonArray(new JsonObject { ["type"] = "tun", ["tag"] = "game-tun", ["interface_name"] = AdapterName,
-            ["address"] = new JsonArray(address, ipv6), ["mtu"] = 1500, ["stack"] = "mixed", ["auto_route"] = true, ["strict_route"] = false, ["dns_mode"] = "disabled",
+            ["address"] = ipv4Only ? new JsonArray(address) : new JsonArray(address, ipv6),
+            ["mtu"] = 1500, ["stack"] = "mixed", ["auto_route"] = true, ["strict_route"] = false, ["dns_mode"] = "disabled",
             ["route_exclude_address"] = new JsonArray("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16", "::1/128", "fc00::/7", "fe80::/10", "ff00::/8") });
         if (probe != 0)
         {

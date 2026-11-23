@@ -23,6 +23,16 @@ public static class TeredoTransitionPolicy
             && Guid.TryParse((string?)n["Guid"], out var guid) && guid != Guid.Empty ? n : null;
     }
     private static bool SameIdentity(JsonObject b, JsonObject a) => (string?)b["Guid"] == (string?)a["Guid"];
+
+    internal static bool HasDefaultRoute(JsonObject snapshot) => (snapshot["NativeInterfaces"] as JsonArray ?? [])
+        .OfType<JsonObject>().Any(row => (int?)row["InterfaceIndex"] is > 0 and int index
+            && index != (int?)snapshot["Physical"]?["Index"] && Identity(snapshot, index) is not null
+            && Rows(snapshot, "Routes", index).Any(IsTeredoDefault));
+
+    private static bool IsTeredoDefault(JsonObject route) => route.Count == 5 && (int?)route["AddressFamily"] == 23
+        && (string?)route["DestinationPrefix"] == "::/0" && (string?)route["NextHop"] == "::"
+        && (int?)route["RouteMetric"] == 256;
+
     public static IReadOnlyList<TeredoTransition> Recognize(JsonObject before, JsonObject during, int own)
     {
         var result = new List<TeredoTransition>();
@@ -32,6 +42,11 @@ public static class TeredoTransitionPolicy
             if (index <= 0 || index == own || index == (int?)before["Physical"]?["Index"] || index == (int?)during["Physical"]?["Index"]
                 || Identity(before, index) is not { } b || Identity(during, index) is not { } d || !SameIdentity(b, d)) continue;
             var oldAdapters = Rows(before, "Adapters", index); var newAdapters = Rows(during, "Adapters", index);
+            if (ProxyNetworkIsolation.Equivalent(b, d) && AddressRotation(before, during, index))
+            {
+                result.Add(new(index, AionTunPlan.Hash((string)b["Guid"]!), "VERIFIED_TEREDO_ADDRESS_ROTATION", 0, 0, 0, 0));
+                continue;
+            }
             if (oldAdapters.Length != 1 || newAdapters.Length != 1 || (bool?)adapter["HardwareInterface"] != false
                 || (string?)adapter["Status"] is not ("Up" or "Disabled") || (string?)newAdapters[0]["Status"] is not ("Up" or "Disabled")
                 || (int?)b["AdminStatus"] is not (1 or 2) || (int?)b["OperStatus"] is not (1 or 2 or 5 or 6) || (int?)b["Mtu"] is not > 0
@@ -53,6 +68,47 @@ public static class TeredoTransitionPolicy
         }
         return result;
     }
+
+    private static bool AddressRotation(JsonObject before, JsonObject after, int index)
+    {
+        // Only the automatic addresses and their own host routes may change. In particular, keep
+        // the original default route in the comparison, along with every other route and DNS row.
+        if (!new[] { "Adapters", "Interfaces", "DNS" }.All(key => SameRows(Rows(before, key, index), Rows(after, key, index))))
+            return false;
+        var oldAddresses = Rows(before, "Addresses", index);
+        var newAddresses = Rows(after, "Addresses", index);
+        if (!AutomaticAddressPair(oldAddresses) || !AutomaticAddressPair(newAddresses) || SameRows(oldAddresses, newAddresses))
+            return false;
+        var oldRoutes = Rows(before, "Routes", index);
+        var newRoutes = Rows(after, "Routes", index);
+        var oldHosts = AddressHostRoutes(oldAddresses, oldRoutes);
+        var newHosts = AddressHostRoutes(newAddresses, newRoutes);
+        return oldRoutes.Count(IsTeredoDefault) == 1 && newRoutes.Count(IsTeredoDefault) == 1
+            && oldHosts is not null && newHosts is not null
+            && SameRows(oldRoutes.Except(oldHosts), newRoutes.Except(newHosts));
+    }
+
+    private static bool AutomaticAddressPair(JsonObject[] addresses) => addresses.Length == 2
+        && addresses.All(AutomaticAddress) && addresses.Count(row => (int?)row["PrefixOrigin"] == 4) == 1;
+
+    private static JsonObject[]? AddressHostRoutes(JsonObject[] addresses, JsonObject[] routes)
+    {
+        var hosts = new List<JsonObject>(addresses.Length);
+        foreach (var address in addresses)
+        {
+            var ip = IPAddress.Parse((string)address["IPAddress"]!);
+            var matches = routes.Where(route => OnLinkRoute(route)
+                && (string?)route["DestinationPrefix"] is { } prefix && prefix.EndsWith("/128", StringComparison.Ordinal)
+                && IPAddress.Parse(prefix[..^4]).Equals(ip)).ToArray();
+            if (matches.Length != 1) return null;
+            hosts.Add(matches[0]);
+        }
+        return hosts.ToArray();
+    }
+
+    private static bool SameRows(IEnumerable<JsonObject> before, IEnumerable<JsonObject> after) =>
+        ProxyNetworkIsolation.Equivalent(new JsonArray(before.Select(row => row.DeepClone()).ToArray()),
+            new JsonArray(after.Select(row => row.DeepClone()).ToArray()));
     private static bool AutomaticState(JsonObject before, int index)
     {
             var interfaces = Rows(before, "Interfaces", index);
