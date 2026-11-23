@@ -32,6 +32,7 @@ internal static class TransportIncidents
         var safe = code switch
         {
             "TRANSPORT_NO_PROFILES" => "PROFILES_UNAVAILABLE",
+            "GAME_PASSIVE_SCOPE_INVALID" => "OBSERVER_SCOPE_INVALID",
             "SELECTED_APPLICATIONS_REQUIRED" or "SELECTED_APPLICATION_MISSING" or "SELECTED_APPLICATION_UNTRUSTED" or
                 "SELECTED_APPLICATION_CHANGED" or "PROXY_LOOP_GUARD_INVALID" => code,
             "GAME_NOT_INSTALLED" or "AION_STEAM_NOT_FOUND" => "GAME_NOT_INSTALLED",
@@ -56,7 +57,7 @@ internal static class TransportIncidents
         {
             stage = safe switch
             {
-                "PROFILES_UNAVAILABLE" or "SELECTED_APPLICATIONS_REQUIRED" or "SELECTED_APPLICATION_MISSING" or
+                "PROFILES_UNAVAILABLE" or "OBSERVER_SCOPE_INVALID" or "SELECTED_APPLICATIONS_REQUIRED" or "SELECTED_APPLICATION_MISSING" or
                     "SELECTED_APPLICATION_UNTRUSTED" or "SELECTED_APPLICATION_CHANGED" => "Проверка приложений",
                 "EXTERNAL_ADDRESS_CHANGED" => "Изоляция сети",
                 _ when safe.StartsWith("TUN_NON_TUN_", StringComparison.Ordinal) || safe == "TUN_LOCAL_PROXY_ROUTE_NOT_EXCLUDED" => "Изоляция сети",

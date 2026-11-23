@@ -27,7 +27,7 @@
         <WrapPanel>
             <Button Margin="0,0,8,4" Style="{StaticResource PultButton}" Content="Открыть папку журналов" Click="OpenLogs_Click" />
             <Button x:Name="saveIncident" Margin="0,0,0,4" Style="{StaticResource PultButton}"
-                    Content="Сохранить отчёт Transport" Click="SaveIncident_Click" />
+                    Content="Сохранить отчёт маршрутизации" Click="SaveIncident_Click" />
         </WrapPanel>
         <Expander Margin="0,8,0,0" Header="Хранение журналов">
             <StackPanel>
@@ -35,7 +35,7 @@
                 <TextBox x:Name="rotationMinutes" />
                 <TextBlock Text="Обычные журналы, часы (1–168)" />
                 <TextBox x:Name="retentionHours" />
-                <TextBlock Text="Отчёты Transport, дни (1–30)" />
+                <TextBlock Text="Отчёты маршрутизации, дни (1–30)" />
                 <TextBox x:Name="transportDays" />
                 <Button x:Name="saveSettings" HorizontalAlignment="Left" Margin="0,8,0,0"
                         Style="{StaticResource PultButton}" Content="Сохранить настройки" Click="SaveSettings_Click" />

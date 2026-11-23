@@ -21,7 +21,7 @@ public partial class DiagnosticsWindow
             .Prepend($"VaKoLink v{version} · {RuntimeInformation.ProcessArchitecture}"));
         _incident = incident;
         saveIncident.IsEnabled = incident is not null;
-        selectedIncident.Text = incident is null ? "Отчётов Transport пока нет."
+        selectedIncident.Text = incident is null ? "Отчётов маршрутизации пока нет."
             : $"{incident.RecordedAt:dd.MM.yyyy HH:mm:ss} · {incident.Primary.Stage}\n{incident.Primary.Message}";
         var settings = AppManager.Instance.Config.VaKoLinkLogs ?? new();
         rotationMinutes.Text = settings.RotationMinutes.ToString();

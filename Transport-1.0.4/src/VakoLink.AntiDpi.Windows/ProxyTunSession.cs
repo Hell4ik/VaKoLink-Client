@@ -62,7 +62,7 @@ public sealed class ProxyTunSession : IAsyncDisposable
     public void MarkMedia(string code) { _media?.Record("UserSymptom", new { Code = code, Current = DiscordEvidence }); }
     private void Event(string stage) { lock (_gate) { if (_events.Count >= 2048) _events.RemoveAt(32); _events.Add(new(stage, DateTimeOffset.UtcNow, _lifecycleClock.ElapsedMilliseconds)); } }
     public string? ConfigurationSha256 { get; private set; }
-    public GamePassiveTrace Observer { get; }
+    public GamePassiveTrace? Observer { get; }
     public ProxyTunSession(LocalProxyEndpoint proxy, string? main, string? hash, string networkScript, bool technical = false,
         IReadOnlyList<DiscordComponentPin>? discord = null, bool persistMedia = true,
         IReadOnlyList<SelectedTransportImage>? selectedImages = null)
@@ -70,7 +70,8 @@ public sealed class ProxyTunSession : IAsyncDisposable
         _localProxy = proxy; _capsule = new JsonObject { ["MainPath"] = main, ["MainSHA256"] = hash, ["CoreSHA256"] = AionTunPlan.CoreSha256 };
         _main = main is null ? null : new("aion2", "Игровой клиент", main, "observe");
         _engine = ""; _networkScript = networkScript; _technical = technical; _observe = false;
-        Observer = new(_main is null ? [] : [_main], detailedAion: true, postCloseTail: true);
+        if (_main is not null)
+            Observer = new([_main], detailedAion: true, postCloseTail: true);
         _discord = discord ?? [];
         _selectedImages = selectedImages ?? [];
         _selectedPaths = _selectedImages.Select(image => image.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -187,7 +188,7 @@ public sealed class ProxyTunSession : IAsyncDisposable
             await CheckAsync(_config);
             _localProxy.VerifyAlive(); VerifyListenerPresent();
             Event("ConfigurationCheckPassed");
-            if (_observe) await Observer.StartAsync(_engine, CancellationToken.None);
+            if (_observe && Observer is not null) await Observer.StartAsync(_engine, CancellationToken.None);
             Event(_observe ? "PassiveObserverStarted" : "TransportOnly_NoWinDivert");
             _child = new(); _child.Start(_config); _pid = _child.Process.Id; _created = true; _stderrStatus = "PrivateCaptureActive"; Event("CoreProcessCreatedAndResumed");
             _api = new(new HttpClientHandler { UseProxy = false }) { BaseAddress = new Uri("http://127.0.0.1:" + _apiPort), Timeout = TimeSpan.FromSeconds(2) };
@@ -232,7 +233,7 @@ public sealed class ProxyTunSession : IAsyncDisposable
                 {
                     try
                     {
-                        _localProxy.VerifyAlive(); VerifyListenerPresent(); await PollAsync(); _apiBudget.Success(); ObserveLocalProxySocket(); if ((_observe && !Observer.Evidence.Running) || _child.Process.HasExited) throw new IOException("TUN_COMPONENT_STOPPED");
+                        _localProxy.VerifyAlive(); VerifyListenerPresent(); await PollAsync(); _apiBudget.Success(); ObserveLocalProxySocket(); if ((_observe && Observer?.Evidence.Running != true) || _child.Process.HasExited) throw new IOException("TUN_COMPONENT_STOPPED");
                         if (_discord.Count > 0 && DateTimeOffset.UtcNow - _lastDiscordProbe > TimeSpan.FromSeconds(30) && (_discordProbeTask is null || _discordProbeTask.IsCompleted))
                         { _lastDiscordProbe = DateTimeOffset.UtcNow; _discordProbeTask = Task.Run(CheckDiscordUdpAsync); }
                         if (DateTimeOffset.UtcNow - _lastProxyProbe > TimeSpan.FromSeconds(30))
@@ -418,7 +419,9 @@ public sealed class ProxyTunSession : IAsyncDisposable
                     File.Delete(stderr); _stderrStatus = _stderrBytes == 0 ? "Empty" : "PrivateDpapiOnly_NoRawReport";
                 }
             }
-            await Observer.StopAsync(); _api?.Dispose(); _api = null;
+            if (Observer is not null) await Observer.StopAsync();
+            var observerClean = Observer?.Evidence.Native.RollbackCompleted ?? true;
+            _api?.Dispose(); _api = null;
             if (_config is not null) { File.Delete(_config); _secretDeleted = !File.Exists(_config); } else _secretDeleted = true;
             if (_baseline is not null)
             {
@@ -436,10 +439,10 @@ public sealed class ProxyTunSession : IAsyncDisposable
                 }
                 if (_operation is not null && after is not null) TunPrivateStore.WriteProtected(Path.Combine(_operation, "after.dpapi"), after.ToJsonString());
                 _cleanupAssessment = _plan is null ? null : ProxyCleanupPolicy.Assess(_baseline, _during, after!, _plan);
-                _clean = (!_created || _exited) && _secretDeleted && (!_created || _cleanupAssessment?.SafeToReleaseJournal == true) && Observer.Evidence.Native.RollbackCompleted
+                _clean = (!_created || _exited) && _secretDeleted && (!_created || _cleanupAssessment?.SafeToReleaseJournal == true) && observerClean
                     && (_poller is null || _poller.IsCompleted) && (_discordProbeTask is null || _discordProbeTask.IsCompleted);
             }
-            else _clean = !_created && _secretDeleted && Observer.Evidence.Native.RollbackCompleted;
+            else _clean = !_created && _secretDeleted && observerClean;
             bool resourcesVerified = _clean; _clean = false;
             if (resourcesVerified)
             {

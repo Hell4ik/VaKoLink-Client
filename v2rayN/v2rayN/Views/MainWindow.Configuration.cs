@@ -208,7 +208,7 @@ public partial class MainWindow
                 new("Конфигурация", configuration),
                 new("Ядро", connection?.IsCoreRunning == true ? "Запущено" : "Остановлено"),
                 new("VPN", vpn),
-                new("Transport", transport)
+                new("Маршрутизация", transport)
             ], _transport?.LastIncident ?? v2rayN.Manager.TransportIncidents.ReadLatest()) { Owner = this }.ShowDialog();
     }
 

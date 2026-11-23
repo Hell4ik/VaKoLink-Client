@@ -11,17 +11,17 @@ internal static class Transport104
     {
         if (!vpn.IsProxyReady)
         {
-            return "Для запуска Transport подключите режим Proxy.";
+            return "Для маршрутизации приложений подключите режим Proxy.";
         }
         if (!Utils.IsAdministrator())
         {
-            return "Для Transport запустите VaKoLink от имени администратора.";
+            return "Для маршрутизации запустите VaKoLink от имени администратора.";
         }
 #if VAKOLINK_TRANSPORT
         return AppManager.Instance.Config.VaKoLinkTransportApplications is { Count: > 0 }
-            ? null : "Выберите приложения для Transport.";
+            ? null : "Выберите приложения для маршрутизации.";
 #else
-        return "Эта сборка не содержит VaKoLink Transport 1.0.4.";
+        return "В этой сборке недоступна маршрутизация приложений.";
 #endif
     }
 
@@ -57,7 +57,7 @@ internal static class Transport104
         });
 #else
         await Task.CompletedTask;
-        throw new InvalidOperationException("Эта сборка не содержит VaKoLink Transport 1.0.4.");
+        throw new InvalidOperationException("В этой сборке недоступна маршрутизация приложений.");
 #endif
     }
 

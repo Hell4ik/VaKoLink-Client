@@ -27,7 +27,7 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare, F
     public bool NeedsStop => _session is not null;
     public bool CleanupPending { get; private set; }
     public string? DiagnosticFailure { get; private set; }
-    public string Status { get; private set; } = "Transport остановлен";
+    public string Status { get; private set; } = "Маршрутизация остановлена";
 
     public Task ToggleAsync() => RunAsync(async () =>
     {
@@ -44,7 +44,7 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare, F
         _stage = "Подготовка";
         _cleanupError = null;
         _lastState = null;
-        Status = "Transport запускается…";
+        Status = "Маршрутизация запускается…";
         Changed?.Invoke();
         try
         {
@@ -54,12 +54,12 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare, F
             var state = _lastState = _session.Read();
             if (!state.Running || state.Failure is not null)
             {
-                throw new InvalidOperationException(state.Failure ?? "Transport не подтвердил запуск.");
+                throw new InvalidOperationException(state.Failure ?? "Ядро маршрутизации не подтвердило запуск.");
             }
 
             IsRunning = true;
             Status = state.Evidence?.SelectedApplications is { } count
-                ? $"Transport работает · приложений: {count}" : "Transport работает";
+                ? $"Маршрутизация работает · приложений: {count}" : "Маршрутизация работает";
             _monitor = new CancellationTokenSource();
             _ = MonitorAsync(_monitor.Token);
         }
@@ -103,7 +103,7 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare, F
         }
         catch (OperationCanceledException)
         {
-            Status = "Операция Transport отменена.";
+            Status = "Операция маршрутизации отменена.";
             if (propagate) throw;
         }
         catch (Exception ex)
@@ -111,7 +111,7 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare, F
             await ReportAsync(ex, ex is AggregateException aggregate ? aggregate.InnerExceptions.FirstOrDefault()?.Message : ex.Message);
             if (_session is not null)
             {
-                Status += " Остановка Transport не подтверждена.";
+                Status += " Остановка маршрутизации не подтверждена.";
             }
             if (propagate)
             {
@@ -129,14 +129,14 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare, F
     private async Task<TransportState> StopSessionAsync()
     {
         var session = _session!;
-        Status = "Transport останавливается…";
+        Status = "Маршрутизация останавливается…";
         Changed?.Invoke();
         await session.StopAsync();
         var state = _lastState = session.Read();
         IsRunning = state.Running && state.Failure is null;
         if (!state.CanRelease)
         {
-            throw new InvalidOperationException(state.Failure ?? "Transport не подтвердил завершение своего ядра.");
+            throw new InvalidOperationException(state.Failure ?? "Ядро маршрутизации не подтвердило завершение.");
         }
 
         CleanupPending = !state.CleanupConfirmed;
@@ -148,8 +148,8 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare, F
         _monitor?.Dispose();
         _monitor = null;
         Status = state.CleanupConfirmed
-            ? "Transport остановлен"
-            : $"Transport остановлен. Проверка очистки не завершена. {DescribeFailure(state.Failure)}";
+            ? "Маршрутизация остановлена"
+            : $"Маршрутизация остановлена. Проверка очистки не завершена. {DescribeFailure(state.Failure)}";
         return state;
     }
 
@@ -231,32 +231,34 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare, F
 
     internal static string DescribeFailure(string? code) => code switch
     {
-        "SELECTED_APPLICATIONS_REQUIRED" => "Выберите от одного до 32 приложений для Transport.",
+        "GAME_PASSIVE_SCOPE_INVALID" => "Не удалось подготовить список наблюдаемых приложений. Сохраните отчёт в «Диагностике».",
+        "TUN_CORE_CHECK_REJECTED" => "Ядро отклонило настройки маршрутизации. Сохраните отчёт в «Диагностике».",
+        "SELECTED_APPLICATIONS_REQUIRED" => "Выберите от одного до 32 приложений для маршрутизации.",
         "SELECTED_APPLICATION_MISSING" => "Файл одного из выбранных приложений не найден. Проверьте список.",
         "SELECTED_APPLICATION_UNTRUSTED" => "Подпись одного из выбранных приложений не подтверждена. Проверьте список.",
         "SELECTED_APPLICATION_CHANGED" => "Файл приложения изменился во время запуска. Повторите проверку.",
-        "PROXY_LOOP_GUARD_INVALID" => "В списке есть приложение, через которое уже работает прокси. Удалите его из списка Transport.",
-        "AION_STEAM_NOT_FOUND" => "Transport не нашёл поддерживаемую установку игры в Steam.",
-        "AION_STEAM_LAUNCHER_UNKNOWN" => "Transport не смог распознать данные установки игры в Steam.",
-        "DISCORD_SIGNED_CLIENT_NOT_FOUND" => "Transport не нашёл установленный клиент голосовой связи с доверенной подписью.",
+        "PROXY_LOOP_GUARD_INVALID" => "В списке есть приложение, через которое уже работает прокси. Удалите его из списка маршрутизации.",
+        "AION_STEAM_NOT_FOUND" => "Маршрутизация не нашла поддерживаемую установку игры в Steam.",
+        "AION_STEAM_LAUNCHER_UNKNOWN" => "Маршрутизация не смогла распознать данные установки игры в Steam.",
+        "DISCORD_SIGNED_CLIENT_NOT_FOUND" => "Маршрутизация не нашла установленный клиент голосовой связи с доверенной подписью.",
         "AION_SIGNATURE_NOT_TRUSTED" or "TUN_AION_SIGNATURE_UNTRUSTED" =>
-            "Transport не смог подтвердить подпись игрового клиента. Проверьте файлы игры через Steam.",
+            "Маршрутизация не смогла подтвердить подпись игрового клиента. Проверьте файлы игры через Steam.",
         "AION_UPDATED_RECHECK_REQUIRED" or "DISCORD_UPDATED_RECHECK_REQUIRED" or "TUN_AION_IMAGE_CHANGED" =>
-            "Файлы приложения изменились. Запустите Transport заново для повторной проверки.",
+            "Файлы приложения изменились. Запустите маршрутизацию заново для повторной проверки.",
         "TUN_NON_TUN_ADDRESS_CHANGED" =>
-            "При запуске Transport изменились IP-адреса другого сетевого интерфейса. Дождитесь стабилизации сети и попробуйте снова.",
+            "При запуске маршрутизации изменились IP-адреса другого сетевого интерфейса. Дождитесь стабилизации сети и попробуйте снова.",
         "TUN_NON_TUN_DNS_CHANGED" or "TUN_NON_TUN_INTERFACE_CHANGED" or "TUN_NON_TUN_ADAPTER_CHANGED" or
         "TUN_NON_TUN_ROUTE_CHANGED" or "TUN_BASELINE_NOT_SETTLED" =>
             "Сетевые настройки изменились во время запуска Transport. Дождитесь стабилизации сети и попробуйте снова.",
         "PROXY_UDP_ASSOCIATE_REJECTED" or "PROXY_UDP_RESPONSE_INVALID" or "PROXY_UDP_RESPONSE_TIMEOUT" or
-        "DISCORD_UDP_CHAIN_NOT_VERIFIED" => "Transport не смог подтвердить передачу UDP через прокси.",
+        "DISCORD_UDP_CHAIN_NOT_VERIFIED" => "Маршрутизация не смогла подтвердить передачу UDP через прокси.",
         "PROXY_NOT_FOUND" or "PROXY_NOT_READY" or "PROXY_LOCAL_SOCKET_UNAVAILABLE" or "PROXY_UPSTREAM_UNRESPONSIVE" =>
-            "Transport не смог подтвердить доступность локального прокси VaKoLink.",
-        "TUN_PREFLIGHT_CONFLICT" => "Обнаружен работающий игровой клиент или другой сетевой обработчик. Запустите Transport перед запуском игры.",
-        "TUN_EXISTING_TUN_OR_DEFAULT_NOT_PHYSICAL" => "Transport обнаружил другой туннель или нестандартный маршрут по умолчанию.",
+            "Маршрутизация не смогла подтвердить доступность локального прокси VaKoLink.",
+        "TUN_PREFLIGHT_CONFLICT" => "Обнаружен работающий игровой клиент или другой сетевой обработчик. Запустите маршрутизацию перед запуском игры.",
+        "TUN_EXISTING_TUN_OR_DEFAULT_NOT_PHYSICAL" => "Маршрутизация обнаружила другой туннель или нестандартный маршрут по умолчанию.",
         "TUN_SYSTEM_PROXY_CHANGED" => "Во время запуска Transport изменился системный прокси Windows.",
         "TUN_FIREWALL_PROFILES_CHANGED" => "Во время запуска Transport изменились параметры брандмауэра Windows.",
-        null => "Сессия Transport завершилась неожиданно.",
-        _ => "Не удалось завершить операцию Transport. Подробности в диагностике."
+        null => "Сессия маршрутизации завершилась неожиданно.",
+        _ => "Не удалось завершить операцию маршрутизации. Подробности в диагностике."
     };
 }
