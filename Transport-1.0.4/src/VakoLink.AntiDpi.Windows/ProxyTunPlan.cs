@@ -31,11 +31,16 @@ public static class ProxyTunPlan
         }
         throw new IOException("TUN_NO_FREE_IPV6_RANGE");
     }
-    public static JsonObject Build(LocalProxyEndpoint proxy, string? main, string physical, string loopback, string address, int api, string secret, int probe = 0, string ipv6 = "fd94:61e9:10::1/126", IReadOnlyList<DiscordComponentPin>? discord = null, int discordProbe = 0)
+    public static JsonObject Build(LocalProxyEndpoint proxy, string? main, string physical, string loopback, string address, int api, string secret, int probe = 0, string ipv6 = "fd94:61e9:10::1/126", IReadOnlyList<DiscordComponentPin>? discord = null, int discordProbe = 0,
+        IReadOnlyList<string>? selectedApplications = null)
     {
-        if (main is null && discord is not { Count: > 0 }) throw new IOException("TRANSPORT_NO_PROFILES");
-        if (!IPAddress.IsLoopback(IPAddress.Parse(proxy.Host)) || proxy.Port is < 1 or > 65535 || proxy.Members.Any(m => string.Equals(m.Path, main, StringComparison.OrdinalIgnoreCase))) throw new IOException("PROXY_LOOP_GUARD_INVALID");
+        var applications = (selectedApplications ?? []).Concat(main is null ? [] : [main])
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (applications.Length == 0 && discord is not { Count: > 0 }) throw new IOException("TRANSPORT_NO_PROFILES");
         var excludes = proxy.Members.Select(m => m.Path).Append(AionTunPlan.CorePath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (!IPAddress.IsLoopback(IPAddress.Parse(proxy.Host)) || proxy.Port is < 1 or > 65535 ||
+            applications.Any(path => !Path.IsPathFullyQualified(path) || excludes.Contains(path, StringComparer.OrdinalIgnoreCase)))
+            throw new IOException("PROXY_LOOP_GUARD_INVALID");
         var rules = new JsonArray(new JsonObject { ["process_path"] = new JsonArray(excludes.Select(p => (JsonNode?)JsonValue.Create(p)).ToArray()), ["action"] = "route", ["outbound"] = "direct" },
             new JsonObject { ["port"] = new JsonArray(53), ["action"] = "route", ["outbound"] = "direct" },
             new JsonObject { ["ip_is_private"] = true, ["action"] = "route", ["outbound"] = "direct" });
@@ -48,8 +53,9 @@ public static class ProxyTunPlan
                 ["users"] = new JsonArray(new JsonObject { ["username"] = "probe", ["password"] = secret }) });
             rules.Add(new JsonObject { ["inbound"] = new JsonArray("node-check"), ["action"] = "route", ["outbound"] = "v2ray-local" });
         }
-        if (main is not null)
-            rules.Add(new JsonObject { ["process_path"] = new JsonArray(main), ["action"] = "route", ["outbound"] = "v2ray-local" });
+        if (applications.Length > 0)
+            rules.Add(new JsonObject { ["process_path"] = new JsonArray(applications.Select(path => (JsonNode?)JsonValue.Create(path)).ToArray()),
+                ["action"] = "route", ["outbound"] = "v2ray-local" });
         var plan = new JsonObject { ["log"] = new JsonObject { ["disabled"] = true },
             ["dns"] = new JsonObject { ["servers"] = new JsonArray(new JsonObject { ["type"] = "local", ["tag"] = "system-direct" }), ["final"] = "system-direct" },
             ["inbounds"] = inbound, ["outbounds"] = new JsonArray(
@@ -59,7 +65,7 @@ public static class ProxyTunPlan
             ["experimental"] = new JsonObject { ["clash_api"] = new JsonObject { ["external_controller"] = "127.0.0.1:" + api, ["secret"] = secret, ["default_mode"] = "rule" } } };
         if (discord is { Count: > 0 })
         {
-            if (discordProbe == 0 || discord.Any(p => !Path.IsPathFullyQualified(p.Path) || Path.GetFileName(p.Path) != "Discord.exe" || excludes.Contains(p.Path, StringComparer.OrdinalIgnoreCase) || string.Equals(p.Path, main, StringComparison.OrdinalIgnoreCase))) throw new IOException("DISCORD_PROFILE_SCOPE_INVALID");
+            if (discordProbe == 0 || discord.Any(p => !Path.IsPathFullyQualified(p.Path) || Path.GetFileName(p.Path) != "Discord.exe" || excludes.Contains(p.Path, StringComparer.OrdinalIgnoreCase) || applications.Contains(p.Path, StringComparer.OrdinalIgnoreCase))) throw new IOException("DISCORD_PROFILE_SCOPE_INVALID");
             var outbound = (JsonObject)plan["outbounds"]![0]!.DeepClone(); outbound["tag"] = "discord-media"; outbound["network"] = "udp"; plan["outbounds"]!.AsArray().Add(outbound);
             inbound.Add(new JsonObject { ["type"] = "socks", ["tag"] = "discord-check", ["listen"] = "127.0.0.1", ["listen_port"] = discordProbe,
                 ["users"] = new JsonArray(new JsonObject { ["username"] = "probe", ["password"] = secret }) });

@@ -276,6 +276,7 @@ public partial class MainWindow
         {
             var reason = Transport104.GetUnavailableReason(connection);
             transportButton.IsEnabled = !connection.Busy && !transport.Busy && (transport.NeedsStop || reason is null);
+            transportAppsButton.IsEnabled = !transport.Busy && !transport.NeedsStop;
             transportButton.Content = transport.CleanupPending ? "Завершить"
                 : transport.NeedsStop ? "Остановить" : "Запустить";
             transportStatus.Text = !transport.Busy && !transport.NeedsStop && reason is not null
@@ -313,6 +314,19 @@ public partial class MainWindow
         modeTun.Click += async (_, _) => await connection.SelectAsync(true);
         connectionButton.Click += async (_, _) => await ToggleConnectionAsync(connection);
         transportButton.Click += async (_, _) => await transport.ToggleAsync();
+        transportAppsButton.Click += async (_, _) =>
+        {
+            var dialog = new TransportAppsWindow(_config.VaKoLinkTransportApplications ?? []) { Owner = this };
+            if (dialog.ShowDialog() != true) return;
+            var previous = _config.VaKoLinkTransportApplications;
+            _config.VaKoLinkTransportApplications = dialog.Applications;
+            if (await ConfigHandler.SaveConfig(_config) != 0)
+            {
+                _config.VaKoLinkTransportApplications = previous;
+                MainSnackbar.MessageQueue?.Enqueue("Не удалось сохранить список приложений.");
+            }
+            RenderTransport();
+        };
         nodeList.MouseDoubleClick += async (_, e) =>
         {
             if (e.ChangedButton == MouseButton.Left && connection is { IsConnected: true, Busy: false } && !transport.Busy &&

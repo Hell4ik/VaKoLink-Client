@@ -18,7 +18,8 @@ internal static class Transport104
             return "Для Transport запустите VaKoLink от имени администратора.";
         }
 #if VAKOLINK_TRANSPORT
-        return null;
+        return AppManager.Instance.Config.VaKoLinkTransportApplications is { Count: > 0 }
+            ? null : "Выберите приложения для Transport.";
 #else
         return "Эта сборка не содержит VaKoLink Transport 1.0.4.";
 #endif
@@ -35,11 +36,12 @@ internal static class Transport104
         AppContext.SetData("VaKoLink.Client.TransportData", Utils.GetPath("transport-data"));
         return await Task.Run<ITransportSession>(async () =>
         {
-            var platform = new LocalTransportPlatform(Environment.ProcessId, port, persistMedia: false);
+            var platform = new LocalTransportPlatform(Environment.ProcessId, port, persistMedia: false,
+                selectedApplications: AppManager.Instance.Config.VaKoLinkTransportApplications?.ToArray() ?? []);
             try
             {
                 var prepared = await platform.PrepareAsync((_, _) => { });
-                return new Session(platform.Create(prepared), prepared.Game is not null, prepared.Discord.Count > 0);
+                return new Session(platform.Create(prepared), prepared.SelectedImages?.Count ?? 0);
             }
             catch (TransportProfilesException error)
             {
@@ -71,7 +73,7 @@ internal static class Transport104
     private static TransportProbeResult? Probe(ProxyProbe? probe) => probe is null ? null :
         new(probe.Socks5, probe.TcpResponse, probe.UdpResponse, probe.DurationMs);
 
-    private sealed class Session(IUserTransportRun run, bool game, bool voice) : ITransportSession
+    private sealed class Session(IUserTransportRun run, int applicationCount) : ITransportSession
     {
         public Task StartAsync() => Task.Run(run.StartAsync);
         public Task StopAsync() => Task.Run(run.StopAsync);
@@ -91,7 +93,8 @@ internal static class Transport104
             var steps = (state.Lifecycle ?? []).GroupBy(step => step.Stage.Split('_')[0])
                 .Select(group => new TransportStep(group.Key, group.First().ElapsedMs, group.Last().ElapsedMs, group.Count()))
                 .Take(48).ToArray();
-            var evidence = new TransportEvidence(game, voice, Probe(state.StartupProxyProbe), steps, changes, state.VoiceUdpVerified);
+            var evidence = new TransportEvidence(null, null, Probe(state.StartupProxyProbe), steps, changes,
+                state.VoiceUdpVerified, applicationCount);
             return new TransportState(state.Running, canRelease, state.Cleanup, state.Failure, evidence);
         }
 

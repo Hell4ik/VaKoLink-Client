@@ -33,7 +33,8 @@ public sealed class UserEventLog
     public void Clear() { lock (_gate) { _lines.Clear(); _length = 0; Revision++; } }
 }
 
-public sealed record PreparedTransport(LocalProxyEndpoint Proxy, GameInstall? Game, IReadOnlyList<DiscordComponentPin> Discord);
+public sealed record PreparedTransport(LocalProxyEndpoint Proxy, GameInstall? Game, IReadOnlyList<DiscordComponentPin> Discord,
+    IReadOnlyList<SelectedTransportImage>? SelectedImages = null);
 public sealed class TransportProfilesException(string gameReason, string voiceReason) : IOException("TRANSPORT_NO_PROFILES")
 {
     public string GameReason { get; } = gameReason;
@@ -58,7 +59,8 @@ public interface IUserTransportPlatform
     IUserTransportRun Create(PreparedTransport prepared);
 }
 
-public sealed class LocalTransportPlatform(int guiPid, int socksPort, bool persistMedia = true) : IUserTransportPlatform
+public sealed class LocalTransportPlatform(int guiPid, int socksPort, bool persistMedia = true,
+    IReadOnlyList<string>? selectedApplications = null) : IUserTransportPlatform
 {
     private async Task<IReadOnlyList<LocalProxyEndpoint>> DiscoverClientAsync() =>
         (await LocalProxy.DiscoverAsync(_discovery))
@@ -92,7 +94,17 @@ public sealed class LocalTransportPlatform(int guiPid, int socksPort, bool persi
             log(exact ? "ИНФО" : "ВНИМАНИЕ", exact ? "Предыдущая операция завершена; исходный снимок совпадает. Журнал архивирован." :
                 "Собственные ресурсы предыдущей операции отсутствуют; журнал безопасно архивирован. Состояние других интерфейсов отличается и не восстанавливалось; сведения сохранены в safe-recovery.");
         }
-        return DiscoverClients(selected, log);
+        return PrepareProfiles(selected, log);
+    }
+
+    private PreparedTransport PrepareProfiles(LocalProxyEndpoint proxy, Action<string, string> log)
+    {
+        if (selectedApplications is null) return DiscoverClients(proxy, log);
+        if (selectedApplications.Count is 0 or > 32) throw new IOException("SELECTED_APPLICATIONS_REQUIRED");
+        if (selectedApplications.Contains(Environment.ProcessPath, StringComparer.OrdinalIgnoreCase))
+            throw new IOException("PROXY_LOOP_GUARD_INVALID");
+        var images = selectedApplications.Distinct(StringComparer.OrdinalIgnoreCase).Select(SelectedTransportImage.Verify).ToArray();
+        return new(proxy, null, [], images);
     }
     private static PreparedTransport DiscoverClients(LocalProxyEndpoint proxy, Action<string, string> log)
     {
@@ -147,7 +159,7 @@ public sealed class LocalTransportPlatform(int guiPid, int socksPort, bool persi
         fresh.VerifyAlive();
         if (ProxyEndpointRefresh.Identity(fresh) != ProxyEndpointRefresh.Identity(p.Proxy))
             log("ИНФО", "V2rayN перезапущен, изменён порт или конфигурация. Новая привязка принята для нового запуска; старый транспорт не возобновляется.");
-        var current = DiscoverClients(fresh, log);
+        var current = PrepareProfiles(fresh, log);
         if (current.Game?.Sha256 != p.Game?.Sha256 || !current.Discord.SequenceEqual(p.Discord))
             log("ИНФО", "Обнаружлено обновление приложения. Доверенная подпись повторно проверена; привязка обновлена до запуска транспорта.");
         return current;
@@ -165,7 +177,8 @@ public sealed class LocalTransportPlatform(int guiPid, int socksPort, bool persi
     {
         private readonly ProxyTunSession _session;
         public LocalRun(PreparedTransport p, bool persistMedia) => _session = new(p.Proxy, p.Game?.Main, p.Game?.Sha256,
-            Path.Combine(AppContext.BaseDirectory, "tools", "ProxyNetworkState.ps1"), discord: p.Discord, persistMedia: persistMedia);
+            Path.Combine(AppContext.BaseDirectory, "tools", "ProxyNetworkState.ps1"), discord: p.Discord, persistMedia: persistMedia,
+            selectedImages: p.SelectedImages);
         public Task StartAsync() => _session.StartAsync(); public Task StopAsync() => _session.StopAsync();
         public UserRunState Read()
         {

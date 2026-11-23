@@ -10,6 +10,7 @@ public class Config
     public bool VaKoLinkUseTun { get; set; }
     public VaKoLinkResumeState? VaKoLinkResume { get; set; }
     public VaKoLinkLogSettings VaKoLinkLogs { get; set; } = new();
+    public List<string> VaKoLinkTransportApplications { get; set; } = [];
 
     #endregion property
 

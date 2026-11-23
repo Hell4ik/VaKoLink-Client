@@ -45,6 +45,9 @@ public sealed class ProxyTunSession : IAsyncDisposable
     private AionTunPlan.PinEvidence? _pins; private bool _created; private int? _exitCode;
     private string _termination = "NotStarted", _stderrStatus = "NotStarted"; private int _stderrBytes; private bool _stderrTruncated;
     private readonly IReadOnlyList<DiscordComponentPin> _discord;
+    private readonly IReadOnlyList<SelectedTransportImage> _selectedImages;
+    private readonly HashSet<string> _selectedPaths;
+    private readonly List<FileStream> _selectedLocks = [];
     private readonly List<FileStream> _discordLocks = []; private int _discordProbePort; private MediaTimeline? _media;
     private Task? _discordProbeTask; private DateTimeOffset _lastDiscordProbe, _lastMedia, _lastIdentity;
     private object? _discordUdpProof; private string? _discordWarning; private string? _mediaFolder;
@@ -61,13 +64,16 @@ public sealed class ProxyTunSession : IAsyncDisposable
     public string? ConfigurationSha256 { get; private set; }
     public GamePassiveTrace Observer { get; }
     public ProxyTunSession(LocalProxyEndpoint proxy, string? main, string? hash, string networkScript, bool technical = false,
-        IReadOnlyList<DiscordComponentPin>? discord = null, bool persistMedia = true)
+        IReadOnlyList<DiscordComponentPin>? discord = null, bool persistMedia = true,
+        IReadOnlyList<SelectedTransportImage>? selectedImages = null)
     {
         _localProxy = proxy; _capsule = new JsonObject { ["MainPath"] = main, ["MainSHA256"] = hash, ["CoreSHA256"] = AionTunPlan.CoreSha256 };
         _main = main is null ? null : new("aion2", "Игровой клиент", main, "observe");
         _engine = ""; _networkScript = networkScript; _technical = technical; _observe = false;
         Observer = new(_main is null ? [] : [_main], detailedAion: true, postCloseTail: true);
         _discord = discord ?? [];
+        _selectedImages = selectedImages ?? [];
+        _selectedPaths = _selectedImages.Select(image => image.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
         _persistMedia = persistMedia;
     }
     public ProxyTunEvidence Evidence
@@ -144,6 +150,13 @@ public sealed class ProxyTunSession : IAsyncDisposable
             string loopback = (string?)_baseline["LoopbackInterface"] ?? throw new IOException("TUN_LOOPBACK_INTERFACE_UNKNOWN");
             _coreLock = new(AionTunPlan.CorePath, FileMode.Open, FileAccess.Read, FileShare.Read);
             if (_main is not null) _mainLock = new(_main.ExecutablePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            foreach (var image in _selectedImages)
+            {
+                TunPrivateStore.VerifyImagePath(image.Path);
+                _selectedLocks.Add(new(image.Path, FileMode.Open, FileAccess.Read, FileShare.Read));
+                if (SelectedTransportImage.Verify(image.Path) != image)
+                    throw new IOException("SELECTED_APPLICATION_CHANGED");
+            }
             foreach (var pin in _discord)
             {
                 TunPrivateStore.VerifyImagePath(pin.Path); _discordLocks.Add(new(pin.Path, FileMode.Open, FileAccess.Read, FileShare.Read));
@@ -167,7 +180,7 @@ public sealed class ProxyTunSession : IAsyncDisposable
                     _media.Record("ProfileStarted", new { Profile = DiscordMediaProfile.Id, SystemProxyEnabled = (int?)_baseline["Proxy"]?["Enable"] == 1, Evidence = DiscordEvidence, Processes = DiscordMediaProfile.ProcessEvidence(_discord) });
                 }
             }
-            var config = ProxyTunPlan.Build(_localProxy, _main?.ExecutablePath, physical, loopback, ProxyTunPlan.ChooseAddress(_baseline), _apiPort, _apiSecret, _probePort, ProxyTunPlan.ChooseIpv6Address(_baseline), _discord, _discordProbePort);
+            var config = ProxyTunPlan.Build(_localProxy, _main?.ExecutablePath, physical, loopback, ProxyTunPlan.ChooseAddress(_baseline), _apiPort, _apiSecret, _probePort, ProxyTunPlan.ChooseIpv6Address(_baseline), _discord, _discordProbePort, _selectedPaths.ToArray());
             _plan = config;
             _config = Path.Combine(_operation, "run-config.json"); await File.WriteAllTextAsync(_config, config.ToJsonString()); ConfigurationSha256 = AionTunPlan.FileHash(_config);
             TunPrivateStore.WriteProtected(Path.Combine(_operation, "configuration.dpapi"), config.ToJsonString());
@@ -274,7 +287,8 @@ public sealed class ProxyTunSession : IAsyncDisposable
         foreach (var n in json["connections"]!.AsArray())
         {
             var m = n!["metadata"]!; string path = AionTunPlan.CanonicalProcess((string?)m["processPath"] ?? "");
-            bool main = _main is not null && string.Equals(path, _main.ExecutablePath, StringComparison.OrdinalIgnoreCase);
+            bool main = _selectedPaths.Contains(path) ||
+                _main is not null && string.Equals(path, _main.ExecutablePath, StringComparison.OrdinalIgnoreCase);
             string inbound = (string?)m["type"] ?? ""; bool probe = _technical && inbound == "socks/node-check";
             var tags = n["chains"]!.AsArray().Select(x => (string?)x).ToArray(); string outbound = tags.Contains("v2ray-local") ? "v2ray-local" : tags.Contains("direct") ? "direct" : "unknown";
             if (tags.Contains("discord-media")) outbound = "discord-media";
@@ -440,6 +454,8 @@ public sealed class ProxyTunSession : IAsyncDisposable
                 _clean = true;
             }
             _coreLock?.Dispose(); _coreLock = null; _mainLock?.Dispose(); _mainLock = null; _running = false;
+            foreach (var file in _selectedLocks) file.Dispose();
+            _selectedLocks.Clear();
             foreach (var f in _discordLocks) f.Dispose(); _discordLocks.Clear(); _media?.Record("TransportStopped", new { _failure, _exitCode, Cleanup = _clean, BaselineAfter = _comparison });
             // Never delete/restore physical-interface routes/DNS or unrelated Windows state to conceal a mismatch.
             if (!_clean) _failure ??= _cleanupAssessment?.Blockers.FirstOrDefault() ?? "TUN_BASELINE_AFTER_MISMATCH";

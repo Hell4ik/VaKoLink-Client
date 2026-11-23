@@ -9,7 +9,8 @@ internal sealed record TransportNetworkChange(string Phase, string Category, int
     string Field, string Change);
 internal sealed record TransportProbeResult(bool Socks5, bool Tcp, bool Udp, long Milliseconds);
 internal sealed record TransportEvidence(bool? GameAvailable, bool? VoiceAvailable, TransportProbeResult? Probe,
-    IReadOnlyList<TransportStep> Steps, IReadOnlyList<TransportNetworkChange> NetworkChanges, bool? VoiceUdpVerified = null);
+    IReadOnlyList<TransportStep> Steps, IReadOnlyList<TransportNetworkChange> NetworkChanges, bool? VoiceUdpVerified = null,
+    int? SelectedApplications = null);
 internal sealed record TransportCause(string Code, string Stage, string Message, string? ExceptionType, string? HResult,
     IReadOnlyList<TransportCause> Causes);
 internal sealed record TransportIncident(string Id, DateTimeOffset RecordedAt, string Version, string Windows, string Vpn,
@@ -31,6 +32,8 @@ internal static class TransportIncidents
         var safe = code switch
         {
             "TRANSPORT_NO_PROFILES" => "PROFILES_UNAVAILABLE",
+            "SELECTED_APPLICATIONS_REQUIRED" or "SELECTED_APPLICATION_MISSING" or "SELECTED_APPLICATION_UNTRUSTED" or
+                "SELECTED_APPLICATION_CHANGED" or "PROXY_LOOP_GUARD_INVALID" => code,
             "GAME_NOT_INSTALLED" or "AION_STEAM_NOT_FOUND" => "GAME_NOT_INSTALLED",
             "GAME_EXECUTABLE_MISSING" => "GAME_EXECUTABLE_MISSING",
             "AION_SIGNATURE_NOT_TRUSTED" or "TUN_AION_SIGNATURE_UNTRUSTED" => "GAME_SIGNATURE_UNTRUSTED",
@@ -53,7 +56,8 @@ internal static class TransportIncidents
         {
             stage = safe switch
             {
-                "PROFILES_UNAVAILABLE" => "Обнаружение приложений",
+                "PROFILES_UNAVAILABLE" or "SELECTED_APPLICATIONS_REQUIRED" or "SELECTED_APPLICATION_MISSING" or
+                    "SELECTED_APPLICATION_UNTRUSTED" or "SELECTED_APPLICATION_CHANGED" => "Проверка приложений",
                 "EXTERNAL_ADDRESS_CHANGED" => "Изоляция сети",
                 _ when safe.StartsWith("TUN_NON_TUN_", StringComparison.Ordinal) || safe == "TUN_LOCAL_PROXY_ROUTE_NOT_EXCLUDED" => "Изоляция сети",
                 _ when safe.Contains("UDP", StringComparison.Ordinal) => "Проверка UDP",

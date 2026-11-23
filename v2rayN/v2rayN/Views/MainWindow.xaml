@@ -222,8 +222,12 @@
                                         <TextBlock x:Name="transportStatus" Margin="0,3,0,0" Foreground="{DynamicResource PultMuted}"
                                                    AutomationProperties.LiveSetting="Polite" Text="Остановлен" TextWrapping="Wrap" />
                                     </StackPanel>
-                                    <Button x:Name="transportButton" Grid.Column="1" VerticalAlignment="Center" MinWidth="98"
-                                            AutomationProperties.Name="Управление Transport" Style="{StaticResource PultButton}" Content="Запустить" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <Button x:Name="transportButton" MinWidth="98"
+                                                AutomationProperties.Name="Управление Transport" Style="{StaticResource PultButton}" Content="Запустить" />
+                                        <Button x:Name="transportAppsButton" Margin="0,5,0,0" Height="30" FontSize="12"
+                                                Style="{StaticResource PultButton}" Content="Приложения" />
+                                    </StackPanel>
                                 </Grid>
                             </Border>
                         </StackPanel>

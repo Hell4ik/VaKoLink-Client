@@ -58,9 +58,8 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare, F
             }
 
             IsRunning = true;
-            Status = state.Evidence is { } profiles
-                ? $"Работает · {(profiles.GameAvailable == true && profiles.VoiceAvailable == true ? "игровой трафик и голосовая связь" : profiles.GameAvailable == true ? "игровой трафик" : "голосовая связь")}"
-                : "Transport работает";
+            Status = state.Evidence?.SelectedApplications is { } count
+                ? $"Transport работает · приложений: {count}" : "Transport работает";
             _monitor = new CancellationTokenSource();
             _ = MonitorAsync(_monitor.Token);
         }
@@ -232,6 +231,11 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare, F
 
     internal static string DescribeFailure(string? code) => code switch
     {
+        "SELECTED_APPLICATIONS_REQUIRED" => "Выберите от одного до 32 приложений для Transport.",
+        "SELECTED_APPLICATION_MISSING" => "Файл одного из выбранных приложений не найден. Проверьте список.",
+        "SELECTED_APPLICATION_UNTRUSTED" => "Подпись одного из выбранных приложений не подтверждена. Проверьте список.",
+        "SELECTED_APPLICATION_CHANGED" => "Файл приложения изменился во время запуска. Повторите проверку.",
+        "PROXY_LOOP_GUARD_INVALID" => "В списке есть приложение, через которое уже работает прокси. Удалите его из списка Transport.",
         "AION_STEAM_NOT_FOUND" => "Transport не нашёл поддерживаемую установку игры в Steam.",
         "AION_STEAM_LAUNCHER_UNKNOWN" => "Transport не смог распознать данные установки игры в Steam.",
         "DISCORD_SIGNED_CLIENT_NOT_FOUND" => "Transport не нашёл установленный клиент голосовой связи с доверенной подписью.",
