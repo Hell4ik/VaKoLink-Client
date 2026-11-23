@@ -41,3 +41,34 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+
+      - name: Verify Windows application routing in an isolated runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+          if (!$admin) { throw 'The Windows runner is not elevated.' }
+          $qa = Join-Path $env:RUNNER_TEMP 'teredo-qa'
+          $core = Join-Path $env:RUNNER_TEMP 'teredo-qa-release'
+          $archive = Get-ChildItem "$env:RUNNER_TEMP/vakolink-output" -Filter '*-windows-x64.zip' | Select-Object -First 1
+          if (!$archive) { throw 'Portable release ZIP missing.' }
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath $core
+          $release = (Get-ChildItem -LiteralPath $core -Directory | Select-Object -First 1).FullName
+          dotnet publish .github/teredo-qa/TeredoCheck.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true "-p:TransportSource=$env:GITHUB_WORKSPACE/Transport-1.0.4" -o $qa
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          foreach ($folder in @('core','tools','fixture-xray')) {
+            New-Item -ItemType Directory -Path (Join-Path $qa $folder) -Force | Out-Null
+          }
+          foreach ($asset in @('core/sing-box.exe','tools/ProxyNetworkState.ps1','tools/Discover-LocalProxy.ps1')) {
+            Copy-Item -LiteralPath (Join-Path $release $asset) -Destination (Join-Path $qa $asset)
+          }
+          Copy-Item -LiteralPath (Join-Path $release 'bin/xray/xray.exe') -Destination (Join-Path $qa 'fixture-xray/xray.exe')
+          $probe = Join-Path $qa 'VaKoLink-Teredo-Routed-Check.exe'
+          $check = Start-Process -FilePath $probe -ArgumentList '--check' -WindowStyle Hidden -PassThru
+          if (!$check.WaitForExit(45000)) { throw 'Policy and filter test timed out.' }
+          Get-Content -LiteralPath (Join-Path $qa 'self-check.txt')
+          if ($check.ExitCode) { exit $check.ExitCode }
+          $network = Start-Process -FilePath $probe -ArgumentList '--local-route-check' -WindowStyle Hidden -PassThru
+          if (!$network.WaitForExit(85000)) { throw 'Application routing test timed out.' }
+          Get-Content -LiteralPath (Join-Path $qa 'local-route.json')
+          exit $network.ExitCode

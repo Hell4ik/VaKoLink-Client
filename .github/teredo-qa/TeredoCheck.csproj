@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>VaKoLink-Teredo-Routed-Check</AssemblyName>
+    <Version>1.30.0</Version>
+    <TransportSource Condition="'$(TransportSource)' == ''">../../vakolink-pult-worktree/Transport-1.0.4</TransportSource>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(TransportSource)/src/VakoLink.AntiDpi.Windows/VakoLink.AntiDpi.Windows.csproj" />
+    <Compile Include="$(TransportSource)/src/VakoLink.AntiDpi.Windows/TunChildProcess.cs" Link="TunChildProcess.cs" />
+    <Compile Include="$(TransportSource)/src/VakoLink.AntiDpi.Windows/ApplicationIpv6Guard.cs" Link="ApplicationIpv6Guard.cs" />
+  </ItemGroup>
+</Project>
