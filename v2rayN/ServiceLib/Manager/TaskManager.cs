@@ -55,7 +55,10 @@ public class TaskManager
                 //Logging.SaveLog("Execute delete expired files");
 
                 FileUtils.DeleteExpiredFiles(Utils.GetBinConfigPath(), DateTime.Now.AddHours(-1), "Test");
-                FileUtils.DeleteExpiredFiles(Utils.GetLogPath(), DateTime.Now.AddDays(-7));
+                if (AppManager.Instance.UseVaKoLinkProfile)
+                    Logging.Prune();
+                else
+                    FileUtils.DeleteExpiredFiles(Utils.GetLogPath(), DateTime.Now.AddDays(-7));
                 FileUtils.DeleteExpiredFiles(Utils.GetTempPath(), DateTime.Now.AddDays(-7));
 
                 try

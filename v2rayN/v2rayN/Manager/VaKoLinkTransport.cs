@@ -1,6 +1,7 @@
 namespace v2rayN.Manager;
 
-internal sealed record TransportState(bool Running, bool CanRelease, bool CleanupConfirmed, string? Failure);
+internal sealed record TransportState(bool Running, bool CanRelease, bool CleanupConfirmed, string? Failure,
+    TransportEvidence? Evidence = null);
 
 internal interface ITransportSession
 {
@@ -9,11 +10,16 @@ internal interface ITransportSession
     TransportState Read();
 }
 
-internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare)
+internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare, Func<string> vpnState)
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private ITransportSession? _session;
     private CancellationTokenSource? _monitor;
+    private string _incidentId = "";
+    private string _stage = "Подготовка";
+    private TransportCause? _cleanupError;
+    private TransportState? _lastState;
+    public TransportIncident? LastIncident { get; private set; }
 
     public event Action? Changed;
     public bool Busy { get; private set; }
@@ -27,28 +33,38 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare)
     {
         if (_session is not null)
         {
+            _stage = "Остановка";
             await StopSessionAsync();
+            if (CleanupPending)
+                await ReportAsync(null, _lastState?.Failure ?? "TUN_BASELINE_AFTER_MISMATCH");
             return;
         }
 
+        _incidentId = Guid.NewGuid().ToString("N");
+        _stage = "Подготовка";
+        _cleanupError = null;
+        _lastState = null;
         Status = "Transport запускается…";
         Changed?.Invoke();
         try
         {
             _session = await prepare();
+            _stage = "Запуск";
             await _session.StartAsync();
-            var state = _session.Read();
+            var state = _lastState = _session.Read();
             if (!state.Running || state.Failure is not null)
             {
                 throw new InvalidOperationException(state.Failure ?? "Transport не подтвердил запуск.");
             }
 
             IsRunning = true;
-            Status = "Transport работает";
+            Status = state.Evidence is { } profiles
+                ? $"Работает · {(profiles.GameAvailable == true && profiles.VoiceAvailable == true ? "игровой трафик и голосовая связь" : profiles.GameAvailable == true ? "игровой трафик" : "голосовая связь")}"
+                : "Transport работает";
             _monitor = new CancellationTokenSource();
             _ = MonitorAsync(_monitor.Token);
         }
-        catch (Exception startup)
+        catch
         {
             if (_session is not null)
             {
@@ -58,7 +74,7 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare)
                 }
                 catch (Exception cleanup)
                 {
-                    throw new InvalidOperationException($"{startup.Message} Ошибка остановки: {cleanup.Message}", startup);
+                    _cleanupError = TransportIncidents.Cause(cleanup.Message, "Очистка", cleanup);
                 }
             }
             throw;
@@ -69,7 +85,10 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare)
     {
         if (_session is not null)
         {
+            _stage = "Остановка";
             await StopSessionAsync();
+            if (CleanupPending)
+                await ReportAsync(null, _lastState?.Failure ?? "TUN_BASELINE_AFTER_MISMATCH");
         }
     }, propagate: true);
 
@@ -83,10 +102,18 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare)
             Changed?.Invoke();
             await transition();
         }
+        catch (OperationCanceledException)
+        {
+            Status = "Операция Transport отменена.";
+            if (propagate) throw;
+        }
         catch (Exception ex)
         {
-            DiagnosticFailure = $"Сбой Transport · 0x{ex.HResult:X8}";
-            Status = $"Ошибка Transport. {ex.Message}";
+            await ReportAsync(ex, ex is AggregateException aggregate ? aggregate.InnerExceptions.FirstOrDefault()?.Message : ex.Message);
+            if (_session is not null)
+            {
+                Status += " Остановка Transport не подтверждена.";
+            }
             if (propagate)
             {
                 throw;
@@ -100,13 +127,13 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare)
         }
     }
 
-    private async Task StopSessionAsync()
+    private async Task<TransportState> StopSessionAsync()
     {
         var session = _session!;
         Status = "Transport останавливается…";
         Changed?.Invoke();
         await session.StopAsync();
-        var state = session.Read();
+        var state = _lastState = session.Read();
         IsRunning = state.Running && state.Failure is null;
         if (!state.CanRelease)
         {
@@ -123,7 +150,8 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare)
         _monitor = null;
         Status = state.CleanupConfirmed
             ? "Transport остановлен"
-            : $"Transport остановлен. Проверка очистки не завершена. {state.Failure}";
+            : $"Transport остановлен. Проверка очистки не завершена. {DescribeFailure(state.Failure)}";
+        return state;
     }
 
     private async Task MonitorAsync(CancellationToken token)
@@ -147,9 +175,11 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare)
                         notify = true;
                         IsRunning = false;
                         Busy = true;
-                        await StopSessionAsync();
-                        DiagnosticFailure = "Сессия Transport завершилась";
-                        Status = $"Ошибка Transport. {state.Failure ?? "Сессия завершилась неожиданно."}";
+                        _lastState = state;
+                        _stage = "Мониторинг";
+                        try { await StopSessionAsync(); }
+                        catch (Exception cleanup) { _cleanupError = TransportIncidents.Cause(cleanup.Message, "Очистка", cleanup); }
+                        await ReportAsync(null, state.Failure);
                         return;
                     }
                 }
@@ -157,8 +187,13 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare)
                 {
                     notify = true;
                     IsRunning = false;
-                    DiagnosticFailure = $"Проверка Transport · 0x{ex.HResult:X8}";
-                    Status = $"Ошибка Transport. {ex.Message}";
+                    _stage = "Мониторинг";
+                    if (_session is not null)
+                    {
+                        try { await StopSessionAsync(); }
+                        catch (Exception cleanup) { _cleanupError = TransportIncidents.Cause(cleanup.Message, "Очистка", cleanup); }
+                    }
+                    await ReportAsync(ex, ex.Message);
                     return;
                 }
                 finally
@@ -176,4 +211,48 @@ internal sealed class VaKoLinkTransport(Func<Task<ITransportSession>> prepare)
         {
         }
     }
+
+    private async Task ReportAsync(Exception? error, string? code)
+    {
+        var primary = TransportIncidents.Cause(code, _stage, error);
+        var evidence = _lastState?.Evidence ?? (error as TransportPreparationException)?.Evidence;
+        var previous = LastIncident?.Id == _incidentId ? LastIncident : null;
+        var report = TransportIncidents.Create(_incidentId, vpnState(), previous?.Primary ?? primary,
+            _cleanupError ?? (_stage == "Остановка" && previous is not null ? primary : previous?.CleanupError),
+            _lastState?.CleanupConfirmed, evidence ?? previous?.Evidence);
+        LastIncident = report;
+        Status = primary.Message;
+        DiagnosticFailure = $"{report.RecordedAt:HH:mm:ss} · {primary.Stage} · {primary.Code} · {report.Id}";
+        try { await Task.Run(() => TransportIncidents.Save(report)); }
+        catch (Exception saveError) when (saveError is System.IO.IOException or UnauthorizedAccessException)
+        {
+            DiagnosticFailure += " · файл отчёта не сохранён";
+        }
+    }
+
+    internal static string DescribeFailure(string? code) => code switch
+    {
+        "AION_STEAM_NOT_FOUND" => "Transport не нашёл поддерживаемую установку игры в Steam.",
+        "AION_STEAM_LAUNCHER_UNKNOWN" => "Transport не смог распознать данные установки игры в Steam.",
+        "DISCORD_SIGNED_CLIENT_NOT_FOUND" => "Transport не нашёл установленный клиент голосовой связи с доверенной подписью.",
+        "AION_SIGNATURE_NOT_TRUSTED" or "TUN_AION_SIGNATURE_UNTRUSTED" =>
+            "Transport не смог подтвердить подпись игрового клиента. Проверьте файлы игры через Steam.",
+        "AION_UPDATED_RECHECK_REQUIRED" or "DISCORD_UPDATED_RECHECK_REQUIRED" or "TUN_AION_IMAGE_CHANGED" =>
+            "Файлы приложения изменились. Запустите Transport заново для повторной проверки.",
+        "TUN_NON_TUN_ADDRESS_CHANGED" =>
+            "При запуске Transport изменились IP-адреса другого сетевого интерфейса. Дождитесь стабилизации сети и попробуйте снова.",
+        "TUN_NON_TUN_DNS_CHANGED" or "TUN_NON_TUN_INTERFACE_CHANGED" or "TUN_NON_TUN_ADAPTER_CHANGED" or
+        "TUN_NON_TUN_ROUTE_CHANGED" or "TUN_BASELINE_NOT_SETTLED" =>
+            "Сетевые настройки изменились во время запуска Transport. Дождитесь стабилизации сети и попробуйте снова.",
+        "PROXY_UDP_ASSOCIATE_REJECTED" or "PROXY_UDP_RESPONSE_INVALID" or "PROXY_UDP_RESPONSE_TIMEOUT" or
+        "DISCORD_UDP_CHAIN_NOT_VERIFIED" => "Transport не смог подтвердить передачу UDP через прокси.",
+        "PROXY_NOT_FOUND" or "PROXY_NOT_READY" or "PROXY_LOCAL_SOCKET_UNAVAILABLE" or "PROXY_UPSTREAM_UNRESPONSIVE" =>
+            "Transport не смог подтвердить доступность локального прокси VaKoLink.",
+        "TUN_PREFLIGHT_CONFLICT" => "Обнаружен работающий игровой клиент или другой сетевой обработчик. Запустите Transport перед запуском игры.",
+        "TUN_EXISTING_TUN_OR_DEFAULT_NOT_PHYSICAL" => "Transport обнаружил другой туннель или нестандартный маршрут по умолчанию.",
+        "TUN_SYSTEM_PROXY_CHANGED" => "Во время запуска Transport изменился системный прокси Windows.",
+        "TUN_FIREWALL_PROFILES_CHANGED" => "Во время запуска Transport изменились параметры брандмауэра Windows.",
+        null => "Сессия Transport завершилась неожиданно.",
+        _ => "Не удалось завершить операцию Transport. Подробности в диагностике."
+    };
 }

@@ -11,21 +11,35 @@ public sealed record DiscordComponentPin(string Path, string Sha256);
 public static class DiscordMediaProfile
 {
     public const string Id = "discord-udp-socks-v1";
-    public static IReadOnlyList<DiscordComponentPin> Discover()
+    public static IReadOnlyList<DiscordComponentPin> Discover() => Discover(out _);
+
+    public static IReadOnlyList<DiscordComponentPin> Discover(out string? failure)
     {
+        failure = "VOICE_NOT_INSTALLED";
         string root = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Discord");
         if (!Directory.Exists(root)) return [];
         var result = new List<DiscordComponentPin>();
         foreach (string dir in Directory.GetDirectories(root, "app-*").OrderDescending().Take(8))
         {
             string image = System.IO.Path.Combine(dir, "Discord.exe");
-            if (!File.Exists(image)) continue;
-            TunPrivateStore.VerifyImagePath(image);
-            if (!AuthenticodeVerifier.IsTrusted(image)) continue;
-            using var signed = X509Certificate.CreateFromSignedFile(image); using var cert = new X509Certificate2(signed);
-            if (cert.GetNameInfo(X509NameType.SimpleName, false) != "Discord Inc.") continue;
-            result.Add(new(image, AionTunPlan.FileHash(image)));
+            if (!File.Exists(image))
+            {
+                if (failure == "VOICE_NOT_INSTALLED") failure = "VOICE_EXECUTABLE_MISSING";
+                continue;
+            }
+            failure = "VOICE_SIGNATURE_UNTRUSTED";
+            try
+            {
+                TunPrivateStore.VerifyImagePath(image);
+                if (!AuthenticodeVerifier.IsTrusted(image)) continue;
+                using var signed = X509Certificate.CreateFromSignedFile(image);
+                using var cert = new X509Certificate2(signed);
+                if (cert.GetNameInfo(X509NameType.SimpleName, false) != "Discord Inc.") continue;
+                result.Add(new(image, AionTunPlan.FileHash(image)));
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException) { }
         }
+        if (result.Count > 0) failure = null;
         return result;
     }
     public static object ProcessEvidence(IReadOnlyList<DiscordComponentPin> pins, LocalProxyEndpoint? proxy = null, string? systemProxy = null)

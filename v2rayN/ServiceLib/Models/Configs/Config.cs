@@ -9,6 +9,7 @@ public class Config
     public string SubIndexId { get; set; }
     public bool VaKoLinkUseTun { get; set; }
     public VaKoLinkResumeState? VaKoLinkResume { get; set; }
+    public VaKoLinkLogSettings VaKoLinkLogs { get; set; } = new();
 
     #endregion property
 
@@ -42,3 +43,10 @@ public class Config
 }
 
 public sealed record VaKoLinkResumeState(string NodeId, string NodeName, bool UseTun);
+
+public sealed class VaKoLinkLogSettings
+{
+    public int RotationMinutes { get; set; } = 60;
+    public int RetentionHours { get; set; } = 24;
+    public int TransportRetentionDays { get; set; } = 7;
+}

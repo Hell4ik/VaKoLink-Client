@@ -12,11 +12,15 @@ public sealed record GameInstall(string Root, string Main, string SteamId, strin
         if (!Regex.IsMatch(id, "^[0-9]{3,12}$")) throw new IOException("AION_STEAM_LAUNCHER_UNKNOWN");
         string path = Path.Combine(Path.GetFullPath(root), @"Aion2\Binaries\Win64\AION2.exe");
         TunPrivateStore.VerifyImagePath(path);
-        if (!File.Exists(path) || !GameComponentTrust.IsSignedNcImage(path)) throw new IOException("AION_SIGNATURE_NOT_TRUSTED");
+        if (!File.Exists(path)) throw new IOException("GAME_EXECUTABLE_MISSING");
+        if (!GameComponentTrust.IsSignedNcImage(path)) throw new IOException("AION_SIGNATURE_NOT_TRUSTED");
         return new(Path.GetFullPath(root), path, id, AionTunPlan.FileHash(path));
     }
-    public static IReadOnlyList<GameInstall> Find()
+    public static IReadOnlyList<GameInstall> Find() => Find(out _);
+
+    internal static IReadOnlyList<GameInstall> Find(out string? rejectedInstall)
     {
+        rejectedInstall = null;
         var libraries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         using var steam = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");
         foreach (string? path in new[] { steam?.GetValue("SteamPath") as string, steam?.GetValue("InstallPath") as string }) if (!string.IsNullOrEmpty(path)) libraries.Add(Path.GetFullPath(path));
@@ -38,7 +42,18 @@ public sealed record GameInstall(string Root, string Main, string SteamId, strin
                 string name = Value(text, "name"), dir = Value(text, "installdir"), id = Value(text, "appid");
                 if (!name.Equals("AION 2", StringComparison.OrdinalIgnoreCase) && !name.Equals("AION2", StringComparison.OrdinalIgnoreCase)) continue;
                 if (string.IsNullOrEmpty(dir) || Path.GetFileName(dir) != dir) continue;
-                try { games.Add(FromRoot(Path.Combine(apps, "common", dir), id)); } catch (IOException) { }
+                string root = Path.Combine(apps, "common", dir);
+                if (!File.Exists(Path.Combine(root, @"Aion2\Binaries\Win64\AION2.exe")))
+                {
+                    rejectedInstall ??= "GAME_EXECUTABLE_MISSING";
+                    continue;
+                }
+                try { games.Add(FromRoot(root, id)); }
+                catch (IOException error)
+                {
+                    if (error.Message == "AION_SIGNATURE_NOT_TRUSTED" || rejectedInstall is null)
+                        rejectedInstall = ProxyTunSession.SafeCode(error);
+                }
             }
         }
         return games.DistinctBy(g => g.Main, StringComparer.OrdinalIgnoreCase).ToArray();
@@ -50,5 +65,5 @@ public sealed record GameInstall(string Root, string Main, string SteamId, strin
         if (!GameComponentTrust.IsSignedNcImage(Main)) throw new IOException("AION_SIGNATURE_NOT_TRUSTED");
         if (AionTunPlan.FileHash(Main) != Sha256) throw new IOException("AION_UPDATED_RECHECK_REQUIRED");
     }
-    public override string ToString() => "Aion 2 · Steam";
+    public override string ToString() => "Игровой клиент · Steam";
 }

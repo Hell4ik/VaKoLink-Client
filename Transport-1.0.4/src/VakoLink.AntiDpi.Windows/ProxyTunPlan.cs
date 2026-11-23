@@ -31,8 +31,9 @@ public static class ProxyTunPlan
         }
         throw new IOException("TUN_NO_FREE_IPV6_RANGE");
     }
-    public static JsonObject Build(LocalProxyEndpoint proxy, string main, string physical, string loopback, string address, int api, string secret, int probe = 0, string ipv6 = "fd94:61e9:10::1/126", IReadOnlyList<DiscordComponentPin>? discord = null, int discordProbe = 0)
+    public static JsonObject Build(LocalProxyEndpoint proxy, string? main, string physical, string loopback, string address, int api, string secret, int probe = 0, string ipv6 = "fd94:61e9:10::1/126", IReadOnlyList<DiscordComponentPin>? discord = null, int discordProbe = 0)
     {
+        if (main is null && discord is not { Count: > 0 }) throw new IOException("TRANSPORT_NO_PROFILES");
         if (!IPAddress.IsLoopback(IPAddress.Parse(proxy.Host)) || proxy.Port is < 1 or > 65535 || proxy.Members.Any(m => string.Equals(m.Path, main, StringComparison.OrdinalIgnoreCase))) throw new IOException("PROXY_LOOP_GUARD_INVALID");
         var excludes = proxy.Members.Select(m => m.Path).Append(AionTunPlan.CorePath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var rules = new JsonArray(new JsonObject { ["process_path"] = new JsonArray(excludes.Select(p => (JsonNode?)JsonValue.Create(p)).ToArray()), ["action"] = "route", ["outbound"] = "direct" },
@@ -47,7 +48,8 @@ public static class ProxyTunPlan
                 ["users"] = new JsonArray(new JsonObject { ["username"] = "probe", ["password"] = secret }) });
             rules.Add(new JsonObject { ["inbound"] = new JsonArray("node-check"), ["action"] = "route", ["outbound"] = "v2ray-local" });
         }
-        rules.Add(new JsonObject { ["process_path"] = new JsonArray(main), ["action"] = "route", ["outbound"] = "v2ray-local" });
+        if (main is not null)
+            rules.Add(new JsonObject { ["process_path"] = new JsonArray(main), ["action"] = "route", ["outbound"] = "v2ray-local" });
         var plan = new JsonObject { ["log"] = new JsonObject { ["disabled"] = true },
             ["dns"] = new JsonObject { ["servers"] = new JsonArray(new JsonObject { ["type"] = "local", ["tag"] = "system-direct" }), ["final"] = "system-direct" },
             ["inbounds"] = inbound, ["outbounds"] = new JsonArray(

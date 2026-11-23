@@ -190,7 +190,8 @@ public partial class MainWindow
 
     private void BindConnectionControls(VaKoLinkConnection connection)
     {
-        var transport = new VaKoLinkTransport(() => Transport104.PrepareAsync(connection));
+        var transport = new VaKoLinkTransport(() => Transport104.PrepareAsync(connection), () =>
+            connection.IsConnected ? (connection.UseTun ? "TUN · подключён" : "Proxy · подключён") : "Отключён");
         _transport = transport;
         connection.BeforeCoreStop = transport.StopBeforeVpnAsync;
         connection.IsTransportRunning = () => transport.IsRunning;

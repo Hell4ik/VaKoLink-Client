@@ -20,7 +20,7 @@ public sealed class MediaTimeline
         }
         catch { _writeErrors++; }
     }
-    public void Sample(JsonArray connections, IReadOnlyList<DiscordComponentPin> pins, string game, DateTimeOffset now, double apiLatencyMs)
+    public void Sample(JsonArray connections, IReadOnlyList<DiscordComponentPin> pins, string? game, DateTimeOffset now, double apiLatencyMs)
     {
         lock (_gate)
         {

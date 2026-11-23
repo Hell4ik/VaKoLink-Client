@@ -209,7 +209,7 @@ public partial class MainWindow
                 new("Ядро", connection?.IsCoreRunning == true ? "Запущено" : "Остановлено"),
                 new("VPN", vpn),
                 new("Transport", transport)
-            ]) { Owner = this }.ShowDialog();
+            ], _transport?.LastIncident ?? v2rayN.Manager.TransportIncidents.ReadLatest()) { Owner = this }.ShowDialog();
     }
 
     private static string ConfigurationDays(int days) => (days % 100) is >= 11 and <= 14 ? "дней"

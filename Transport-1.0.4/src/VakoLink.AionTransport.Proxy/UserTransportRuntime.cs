@@ -33,12 +33,18 @@ public sealed class UserEventLog
     public void Clear() { lock (_gate) { _lines.Clear(); _length = 0; Revision++; } }
 }
 
-public sealed record PreparedTransport(LocalProxyEndpoint Proxy, GameInstall Game, IReadOnlyList<DiscordComponentPin> Discord);
+public sealed record PreparedTransport(LocalProxyEndpoint Proxy, GameInstall? Game, IReadOnlyList<DiscordComponentPin> Discord);
+public sealed class TransportProfilesException(string gameReason, string voiceReason) : IOException("TRANSPORT_NO_PROFILES")
+{
+    public string GameReason { get; } = gameReason;
+    public string VoiceReason { get; } = voiceReason;
+}
 public sealed record UserRunState(bool Running, bool Cleanup, string? Failure, bool CoreCreated = false, bool CoreExited = false,
     int? ExitCode = null, IReadOnlyList<TunLifecycleEvent>? Lifecycle = null, object? Native = null, object? Discord = null,
     string? ConfigurationSha256 = null, bool GameObserved = false, bool DiscordObserved = false,
     IReadOnlyList<NetworkIsolationCheck>? StartupIsolation = null, ProxyProbe? StartupProxyProbe = null,
-    ProxyCleanupAssessment? CleanupAssessment = null, bool CanExitWithPendingAudit = false);
+    ProxyCleanupAssessment? CleanupAssessment = null, bool CanExitWithPendingAudit = false,
+    IReadOnlyList<NetworkCleanupCheck>? CleanupChecks = null, bool? VoiceUdpVerified = null);
 public interface IUserTransportRun
 {
     Task StartAsync(); Task StopAsync(); UserRunState Read();
@@ -52,7 +58,7 @@ public interface IUserTransportPlatform
     IUserTransportRun Create(PreparedTransport prepared);
 }
 
-public sealed class LocalTransportPlatform(int guiPid, int socksPort) : IUserTransportPlatform
+public sealed class LocalTransportPlatform(int guiPid, int socksPort, bool persistMedia = true) : IUserTransportPlatform
 {
     private async Task<IReadOnlyList<LocalProxyEndpoint>> DiscoverClientAsync() =>
         (await LocalProxy.DiscoverAsync(_discovery))
@@ -99,13 +105,37 @@ public sealed class LocalTransportPlatform(int guiPid, int socksPort) : IUserTra
             try { saved = TunPrivateStore.ReadProtected(settings); }
             catch { log("ВНИМАНИЕ", "Сохранённые сведения об установке не прочитаны; выполняется независимый поиск Steam."); }
         }
-        if (saved?["Root"] is not null && saved["SteamId"] is not null && Directory.Exists((string)saved["Root"]!))
-            game = GameInstall.FromRoot((string)saved["Root"]!, (string)saved["SteamId"]!);
-        game ??= GameInstall.Find().FirstOrDefault();
-        if (game is null) throw new IOException("AION_STEAM_NOT_FOUND");
-        game.VerifyUnchanged(); var discord = DiscordMediaProfile.Discover();
-        if (discord.Count == 0) throw new IOException("DISCORD_SIGNED_CLIENT_NOT_FOUND");
-        log("ИНФО", "Подписи Aion и Discord проверены. Общие правила готовы; неподтверждённые компоненты не добавлялись.");
+        string? gameReason = null;
+        try
+        {
+            if (saved?["Root"] is not null && saved["SteamId"] is not null && Directory.Exists((string)saved["Root"]!))
+            {
+                try { game = GameInstall.FromRoot((string)saved["Root"]!, (string)saved["SteamId"]!); }
+                catch (IOException error) { gameReason = ProxyTunSession.SafeCode(error); }
+            }
+            if (game is null)
+            {
+                game = GameInstall.Find(out var rejectedInstall).FirstOrDefault();
+                gameReason = rejectedInstall ?? gameReason;
+            }
+            game?.VerifyUnchanged();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
+        {
+            game = null;
+            gameReason = ProxyTunSession.SafeCode(error);
+        }
+        IReadOnlyList<DiscordComponentPin> discord;
+        string? voiceReason;
+        try { discord = DiscordMediaProfile.Discover(out voiceReason); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
+        {
+            discord = [];
+            voiceReason = "VOICE_DISCOVERY_FAILED";
+        }
+        if (game is null && discord.Count == 0)
+            throw new TransportProfilesException(gameReason ?? "GAME_NOT_INSTALLED", voiceReason ?? "VOICE_NOT_INSTALLED");
+        log("ИНФО", $"Профили Transport: игровой трафик — {(game is null ? "недоступен" : "готов")}; голосовая связь — {(discord.Count == 0 ? "недоступна" : "готова")}.");
         return new(proxy, game, discord);
     }
     public async Task<PreparedTransport> RevalidateAsync(PreparedTransport p, Action<string, string> log)
@@ -118,7 +148,7 @@ public sealed class LocalTransportPlatform(int guiPid, int socksPort) : IUserTra
         if (ProxyEndpointRefresh.Identity(fresh) != ProxyEndpointRefresh.Identity(p.Proxy))
             log("ИНФО", "V2rayN перезапущен, изменён порт или конфигурация. Новая привязка принята для нового запуска; старый транспорт не возобновляется.");
         var current = DiscoverClients(fresh, log);
-        if (current.Game.Sha256 != p.Game.Sha256 || !current.Discord.SequenceEqual(p.Discord))
+        if (current.Game?.Sha256 != p.Game?.Sha256 || !current.Discord.SequenceEqual(p.Discord))
             log("ИНФО", "Обнаружлено обновление приложения. Доверенная подпись повторно проверена; привязка обновлена до запуска транспорта.");
         return current;
     }
@@ -130,12 +160,12 @@ public sealed class LocalTransportPlatform(int guiPid, int socksPort) : IUserTra
         foreach (var a in p.Attempts ?? [])
             log(a.Passed || a.Failure == "PROBE_SUPERSEDED_AFTER_SUCCESS" ? "ИНФО" : "ВНИМАНИЕ", $"Проверка {a.Protocol.ToUpperInvariant()} · {a.Target}: этап={a.Stage}; SOCKS5={(a.Socks5 ? "да" : "нет")}; {a.DurationMs} мс; {(a.Passed ? "ответ проверен" : a.Failure == "PROBE_SUPERSEDED_AFTER_SUCCESS" ? "проверка завершена после проверенного ответа альтернативной цели" : a.Failure)}.");
     }
-    public IUserTransportRun Create(PreparedTransport p) => new LocalRun(p);
+    public IUserTransportRun Create(PreparedTransport p) => new LocalRun(p, persistMedia);
     private sealed class LocalRun : IUserTransportRun
     {
         private readonly ProxyTunSession _session;
-        public LocalRun(PreparedTransport p) => _session = new(p.Proxy, p.Game.Main, p.Game.Sha256,
-            Path.Combine(AppContext.BaseDirectory, "tools", "ProxyNetworkState.ps1"), discord: p.Discord);
+        public LocalRun(PreparedTransport p, bool persistMedia) => _session = new(p.Proxy, p.Game?.Main, p.Game?.Sha256,
+            Path.Combine(AppContext.BaseDirectory, "tools", "ProxyNetworkState.ps1"), discord: p.Discord, persistMedia: persistMedia);
         public Task StartAsync() => _session.StartAsync(); public Task StopAsync() => _session.StopAsync();
         public UserRunState Read()
         {
@@ -143,7 +173,8 @@ public sealed class LocalTransportPlatform(int guiPid, int socksPort) : IUserTra
             return new(e.Running, e.CleanupConfirmed, e.Failure, e.CoreCreated, e.CoreExited, e.CoreExitCode, e.Lifecycle,
                 e, _session.DiscordEvidence, _session.ConfigurationSha256, e.Flows.Any(f => f.SelectedMain && f.Outbound == "v2ray-local"),
                 e.Flows.Any(f => f.Component == "Discord.exe" && f.Network == "udp" && f.Outbound == "discord-media"), e.StartupIsolation, e.StartupProxyProbe,
-                e.CleanupAssessment, !e.Running && (!e.CoreCreated || e.CoreExited) && e.SecretConfigurationDeleted);
+                e.CleanupAssessment, !e.Running && (!e.CoreCreated || e.CoreExited) && e.SecretConfigurationDeleted,
+                e.CleanupChecks, _session.VoiceUdpVerified);
         }
     }
 }
@@ -161,7 +192,7 @@ public sealed class UserTransportController
     private bool _startupProbeLogged;
     private readonly string _readinessReport = Guid.NewGuid().ToString("N"); private readonly Queue<object> _readinessHistory = new();
     public UserEventLog Log { get; } = new(); public UserTransportPhase Phase { get; private set; } = UserTransportPhase.Preparing;
-    public object? PreparedScopeEvidence => _prepared is null ? null : new { AionPathSha256 = AionTunPlan.Hash(_prepared.Game.Main),
+    public object? PreparedScopeEvidence => _prepared is null ? null : new { GameAvailable = _prepared.Game is not null,
         DiscordPathSha256 = _prepared.Discord.Select(p => AionTunPlan.Hash(p.Path)).ToArray(), _prepared.Proxy.Port, Mode = "CombinedAionDiscord" };
     public event Action? Changed;
     public UserTransportController(IUserTransportPlatform platform, bool persist = true)
@@ -328,8 +359,8 @@ public sealed class UserTransportController
         _isolationLogged = checks.Count;
         if (!_startupProbeLogged && e.StartupProxyProbe is not null && _prepared is not null)
         { _startupProbeLogged = true; LocalTransportPlatform.ProbeLog(Add, _prepared.Proxy.Port, e.StartupProxyProbe); }
-        if (!_gameLogged && e.GameObserved) { _gameLogged = true; Add("ИНФО", "Обнаружено соединение проверенного Aion; применено сохранённое игровое правило."); }
-        if (!_discordLogged && e.DiscordObserved) { _discordLogged = true; Add("ИНФО", "Обнаружен UDP проверенного Discord; применено сохранённое правило передачи через прокси."); }
+        if (!_gameLogged && e.GameObserved) { _gameLogged = true; Add("ИНФО", "К соединению игрового клиента применено правило Transport."); }
+        if (!_discordLogged && e.DiscordObserved) { _discordLogged = true; Add("ИНФО", "UDP клиента голосовой связи направлен через прокси."); }
         if (e.Discord is not null)
         {
             var media = JsonSerializer.SerializeToNode(e.Discord); var probe = media?["UdpChainProbe"];
@@ -391,8 +422,8 @@ public sealed class UserTransportController
         "PROXY_UDP_RESPONSE_TIMEOUT" => "Не получен контрольный UDP-ответ через прокси. Успешный TCP не заменяет UDP; этап и контрольные цели сохранены в журнале.",
         "PROXY_LOCAL_SOCKET_UNAVAILABLE" => "Локальный вход V2rayN больше не принимает соединения. Выполняется повторное обнаружение текущего порта; старые параметры не используются для нового запуска.",
         "PROXY_UDP_ASSOCIATE_REJECTED" or "PROXY_UDP_RESPONSE_INVALID" or "DISCORD_UDP_CHAIN_NOT_VERIFIED" => "Не подтверждена передача UDP через прокси. Проверьте доступность выбранного подключения V2rayN.",
-        "AION_STEAM_NOT_FOUND" => "Установка Aion не найдена. Проверьте её наличие в Steam; запускать игру для подготовки не нужно.",
-        "DISCORD_SIGNED_CLIENT_NOT_FOUND" => "Подписанный клиент Discord не найден. Проверьте установку обычного Discord.",
+        "AION_STEAM_NOT_FOUND" => "Поддерживаемая установка игры не найдена в Steam.",
+        "DISCORD_SIGNED_CLIENT_NOT_FOUND" => "Клиент голосовой связи с доверенной подписью не найден.",
         "AION_SIGNATURE_NOT_TRUSTED" or "TUN_AION_SIGNATURE_UNTRUSTED" => "Подпись клиента игры не прошла проверку. Проверьте файлы игры в Steam.",
         "AION_UPDATED_RECHECK_REQUIRED" or "DISCORD_UPDATED_RECHECK_REQUIRED" or "TUN_AION_IMAGE_CHANGED" => "Приложение обновилось. Подождите автоматической повторной проверки перед включением.",
         "TUN_CORE_HASH_CHANGED" => "Файлы транспорта отличаются от проверенного комплекта. Распакуйте выпуск заново в отдельную папку.",

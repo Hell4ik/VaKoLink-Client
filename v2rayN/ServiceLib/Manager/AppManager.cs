@@ -69,13 +69,18 @@ public sealed class AppManager
             Environment.SetEnvironmentVariable(Global.LocalAppData, "1", EnvironmentVariableTarget.Process);
         }
 
-        Logging.Setup();
+        Logging.Setup(UseVaKoLinkProfile);
         var config = ConfigHandler.LoadConfig();
         if (config == null)
         {
             return false;
         }
         _config = config;
+        if (UseVaKoLinkProfile)
+        {
+            Logging.ConfigureRetention(config.VaKoLinkLogs);
+            _ = Task.Run(Logging.Prune);
+        }
         Thread.CurrentThread.CurrentUICulture = new(_config.UiItem.CurrentLanguage);
 
         //Under Win10
