@@ -5,7 +5,9 @@ $ErrorActionPreference='Stop'
 # Read-only projection. Raw output is consumed privately/DPAPI protected, never published as a safe report.
 $adapters=@(Get-NetAdapter -IncludeHidden|Sort-Object InterfaceIndex|Select-Object InterfaceIndex,Name,Status,HardwareInterface,InterfaceDescription)
 $routes=@(Get-NetRoute -PolicyStore ActiveStore|Sort-Object InterfaceIndex,AddressFamily,DestinationPrefix,NextHop|Select-Object InterfaceIndex,AddressFamily,DestinationPrefix,NextHop,RouteMetric)
-$ips=@(Get-NetIPAddress -PolicyStore ActiveStore|Sort-Object InterfaceIndex,AddressFamily,IPAddress|Select-Object InterfaceIndex,AddressFamily,IPAddress,PrefixLength,PrefixOrigin)
+$addressTable=@(Get-NetIPAddress -PolicyStore ActiveStore|Sort-Object InterfaceIndex,AddressFamily,IPAddress)
+$ips=@($addressTable|Select-Object InterfaceIndex,AddressFamily,IPAddress,PrefixLength,PrefixOrigin)
+$ipv6Details=@($addressTable|Where-Object {[int]$_.AddressFamily -eq 23}|Select-Object InterfaceIndex,IPAddress,PrefixLength,SuffixOrigin,AddressState)
 $interfaces=@(Get-NetIPInterface -PolicyStore ActiveStore|Sort-Object InterfaceIndex,AddressFamily|Select-Object InterfaceIndex,AddressFamily,InterfaceMetric,NlMtu,Dhcp,ConnectionState)
 $dns=@(Get-DnsClientServerAddress|Sort-Object InterfaceIndex,AddressFamily|Select-Object InterfaceIndex,AddressFamily,ServerAddresses)
 $firewall=@(Get-NetFirewallProfile|Sort-Object Name|Select-Object Name,Enabled,DefaultInboundAction,DefaultOutboundAction)
@@ -15,7 +17,7 @@ $best=@($defaults|ForEach-Object{$r=$_;$i=$interfaces|Where-Object{$_.InterfaceI
  [pscustomobject]@{Index=$r.InterfaceIndex;Metric=[int]$r.RouteMetric+[int]$i.InterfaceMetric}}|Sort-Object Metric|Select-Object -First 1)
 $physical=$adapters|Where-Object{$_.InterfaceIndex -eq $best[0].Index}|Select-Object -First 1
 $loopback=Get-NetIPInterface -AddressFamily IPv4|Where-Object{$_.InterfaceIndex -eq 1}|Select-Object -First 1
-[ordered]@{Adapters=$adapters;Routes=$routes;Addresses=$ips;Interfaces=$interfaces;DNS=$dns;Firewall=$firewall
+[ordered]@{Adapters=$adapters;Routes=$routes;Addresses=$ips;IPv6AddressDetails=$ipv6Details;Interfaces=$interfaces;DNS=$dns;Firewall=$firewall
  Proxy=[ordered]@{Enable=$proxy.ProxyEnable;Server=$proxy.ProxyServer;Override=$proxy.ProxyOverride;PAC=$proxy.AutoConfigURL}
  Physical=[ordered]@{Index=$physical.InterfaceIndex;Name=$physical.Name;Hardware=$physical.HardwareInterface}
  LoopbackInterface=$loopback.InterfaceAlias

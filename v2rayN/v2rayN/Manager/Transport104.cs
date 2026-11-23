@@ -1,3 +1,4 @@
+using System.Text.Json;
 #if VAKOLINK_TRANSPORT
 using VakoLink.AionTransport.Proxy;
 using VakoLink.AntiDpi.Windows;
@@ -93,10 +94,17 @@ internal static class Transport104
             var steps = (state.Lifecycle ?? []).GroupBy(step => step.Stage.Split('_')[0])
                 .Select(group => new TransportStep(group.Key, group.First().ElapsedMs, group.Last().ElapsedMs, group.Count()))
                 .Take(48).ToArray();
+            var interfaces = (state.StartupIsolation ?? []).Where(check => check.InterfaceReports is { Count: > 0 })
+                .Select(check => new InterfaceSnapshot($"startup-{check.Snapshot}", check.ElapsedMs, check.InterfaceReports!)).ToList();
+            if (state.CleanupChecks?.LastOrDefault()?.InterfaceReports is { Count: > 0 } after)
+                interfaces.Add(new("cleanup", null, after));
             var evidence = new TransportEvidence(null, null, Probe(state.StartupProxyProbe), steps, changes,
-                state.VoiceUdpVerified, applicationCount);
+                state.VoiceUdpVerified, applicationCount,
+                interfaces.Count == 0 ? null : JsonSerializer.SerializeToElement(interfaces));
             return new TransportState(state.Running, canRelease, state.Cleanup, state.Failure, evidence);
         }
+
+        private sealed record InterfaceSnapshot(string Phase, long? ElapsedMs, IReadOnlyList<NetworkInterfaceReport> Interfaces);
 
         private static TransportNetworkChange Project(string phase, string category, NetworkFieldDifference change)
         {

@@ -9,13 +9,14 @@ public sealed record NetworkIsolationPredicate(string Id, bool Passed, string Re
     IReadOnlyList<NetworkFieldDifference> Differences, bool DifferencesTruncated = false);
 public sealed record NetworkIsolationCheck(int Snapshot, long ElapsedMs, bool Passed, string? FailureCode,
     IReadOnlyList<NetworkIsolationPredicate> Predicates, IReadOnlyList<NetworkInterfaceContext>? InterfaceContexts = null,
-    IReadOnlyList<TeredoTransition>? TeredoTransitions = null);
+    IReadOnlyList<TeredoTransition>? TeredoTransitions = null, IReadOnlyList<NetworkInterfaceReport>? InterfaceReports = null);
 public sealed record NetworkInterfaceContext(int InterfaceIndex, string Snapshot, bool AdapterPresent, bool? Hardware,
     string? AdapterIdentitySha256, string? Status, int IpInterfaceRows, int DnsRows, int AddressRows, int RouteRows, bool SelectedPhysical,
     bool NativeIdentityAvailable = false, int? NativeType = null, int? NativeTunnelType = null, string? NativeIdentitySha256 = null);
 public sealed record NetworkCategoryDifference(string Category, bool Equal, IReadOnlyList<NetworkFieldDifference> Differences, bool Truncated);
 public sealed record NetworkCleanupCheck(DateTimeOffset Utc, IReadOnlyDictionary<string, bool> BaselineAfter,
-    ProxyCleanupAssessment Assessment, IReadOnlyList<NetworkCategoryDifference>? Differences = null);
+    ProxyCleanupAssessment Assessment, IReadOnlyList<NetworkCategoryDifference>? Differences = null,
+    IReadOnlyList<NetworkInterfaceReport>? InterfaceReports = null);
 
 /// <summary>Read-only checks. Row ordering is irrelevant; duplicates, every field and DNS server order remain significant.</summary>
 public static class ProxyNetworkIsolation
@@ -70,10 +71,10 @@ public static class ProxyNetworkIsolation
             "FIREWALL_PROFILES_UNCHANGED" => "TUN_FIREWALL_PROFILES_CHANGED",
             _ => "TUN_ROUTING_DNS_ISOLATION_FAILED"
         };
-        var indexes = predicates.SelectMany(p => p.Differences).Select(d => d.Row).Where(r => r.StartsWith("interface=", StringComparison.Ordinal))
-            .Select(r => int.Parse(r[10..].Split(';')[0], System.Globalization.CultureInfo.InvariantCulture)).Distinct().Take(16);
+        var indexes = NetworkInterfaceReports.AffectedIndexes(predicates.SelectMany(p => p.Differences));
         var contexts = indexes.SelectMany(index => new[] { Context(baseline, index, "Before"), Context(active, index, "During") }).ToArray();
-        return new(snapshot, elapsedMs, failure is null, failure, predicates, contexts, teredo);
+        var reports = NetworkInterfaceReports.Build(baseline, active, indexes);
+        return new(snapshot, elapsedMs, failure is null, failure, predicates, contexts, teredo, reports);
     }
 
     // One authoritative startup audit, also used by cleanup/recovery. Cleanup ownership is a separate question.

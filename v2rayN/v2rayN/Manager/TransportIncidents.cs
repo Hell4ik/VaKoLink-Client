@@ -10,7 +10,7 @@ internal sealed record TransportNetworkChange(string Phase, string Category, int
 internal sealed record TransportProbeResult(bool Socks5, bool Tcp, bool Udp, long Milliseconds);
 internal sealed record TransportEvidence(bool? GameAvailable, bool? VoiceAvailable, TransportProbeResult? Probe,
     IReadOnlyList<TransportStep> Steps, IReadOnlyList<TransportNetworkChange> NetworkChanges, bool? VoiceUdpVerified = null,
-    int? SelectedApplications = null);
+    int? SelectedApplications = null, JsonElement? NetworkInterfaces = null);
 internal sealed record TransportCause(string Code, string Stage, string Message, string? ExceptionType, string? HResult,
     IReadOnlyList<TransportCause> Causes);
 internal sealed record TransportIncident(string Id, DateTimeOffset RecordedAt, string Version, string Windows, string Vpn,

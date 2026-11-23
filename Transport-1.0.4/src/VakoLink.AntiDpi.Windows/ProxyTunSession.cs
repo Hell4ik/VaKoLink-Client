@@ -424,7 +424,13 @@ public sealed class ProxyTunSession : IAsyncDisposable
                     if (_cleanupAssessment is not null) lock (_gate)
                     {
                         if (_cleanupChecks.Count >= 32) _cleanupChecks.RemoveAt(0);
-                        _cleanupChecks.Add(new(DateTimeOffset.UtcNow, _comparison, _cleanupAssessment, ProxyNetworkIsolation.DescribeChanges(_baseline, after)));
+                        var differences = ProxyNetworkIsolation.DescribeChanges(_baseline, after);
+                        var changedAtStartup = _isolation.SelectMany(check => check.InterfaceReports ?? [])
+                            .Select(item => item.InterfaceIndex);
+                        var changedAtCleanup = NetworkInterfaceReports.AffectedIndexes(
+                            differences.SelectMany(category => category.Differences));
+                        var reports = NetworkInterfaceReports.Build(_baseline, after, changedAtStartup.Concat(changedAtCleanup));
+                        _cleanupChecks.Add(new(DateTimeOffset.UtcNow, _comparison, _cleanupAssessment, differences, reports));
                     }
                     if (_cleanupAssessment?.SafeToReleaseJournal == true) break; await Task.Delay(800);
                 }
