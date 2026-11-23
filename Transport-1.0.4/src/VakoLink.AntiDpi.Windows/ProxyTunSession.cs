@@ -408,16 +408,7 @@ public sealed class ProxyTunSession : IAsyncDisposable
                 _exited = _created && _child.Process.HasExited; if (_exited) _exitCode = _child.Process.ExitCode;
                 _child.Dispose(); _child = null;
                 _running = false;
-                string stderr = Path.Combine(_operation!, "core-stderr.txt");
-                if (File.Exists(stderr))
-                {
-                    using (var f = File.OpenRead(stderr))
-                    {
-                        _stderrTruncated = f.Length > 65536; var b = new byte[(int)Math.Min(65536, f.Length)]; f.ReadExactly(b); _stderrBytes = b.Length;
-                        TunPrivateStore.WriteProtected(Path.Combine(_operation!, "core-stderr.dpapi"), new JsonObject { ["Bytes"] = Convert.ToBase64String(b), ["Truncated"] = _stderrTruncated }.ToJsonString()); CryptographicOperations.ZeroMemory(b);
-                    }
-                    File.Delete(stderr); _stderrStatus = _stderrBytes == 0 ? "Empty" : "PrivateDpapiOnly_NoRawReport";
-                }
+                await ProtectCoreOutputAsync();
             }
             if (Observer is not null) await Observer.StopAsync();
             var observerClean = Observer?.Evidence.Native.RollbackCompleted ?? true;
@@ -469,5 +460,42 @@ public sealed class ProxyTunSession : IAsyncDisposable
         }
         finally { _stop.Release(); }
     }
+
+    private async Task ProtectCoreOutputAsync()
+    {
+        var stderr = Path.Combine(_operation!, "core-stderr.txt");
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                if (!File.Exists(stderr)) return;
+                using (var stream = new FileStream(stderr, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                {
+                    _stderrTruncated = stream.Length > 65536;
+                    var buffer = new byte[(int)Math.Min(65536, stream.Length)];
+                    try
+                    {
+                        stream.ReadExactly(buffer);
+                        _stderrBytes = buffer.Length;
+                        if (buffer.Length > 0)
+                            TunPrivateStore.WriteProtected(Path.Combine(_operation!, "core-stderr.dpapi"),
+                                new JsonObject { ["Bytes"] = Convert.ToBase64String(buffer), ["Truncated"] = _stderrTruncated }.ToJsonString());
+                    }
+                    finally { CryptographicOperations.ZeroMemory(buffer); }
+                }
+                File.Delete(stderr);
+                _stderrStatus = _stderrBytes == 0 ? "Empty" : "PrivateDpapiOnly_NoRawReport";
+                return;
+            }
+            catch (IOException) when (attempt < 2) { await Task.Delay(150); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                _stderrStatus = "PrivateCaptureUnavailable";
+                Event("PrivateCoreOutputArchiveFailed");
+                return;
+            }
+        }
+    }
+
     public async ValueTask DisposeAsync() => await StopAsync();
 }
