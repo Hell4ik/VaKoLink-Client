@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build:
@@ -29,28 +30,26 @@ jobs:
         with:
           dotnet-version: 10.0.114
 
-      - name: Build the portable Windows client
-        shell: pwsh
-        run: ./tools/Build-VaKoLinkWindows.ps1 -OutputDirectory "$env:RUNNER_TEMP/vakolink-output"
-
-      - name: Upload the portable build
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: VaKoLink-windows-x64
-          path: ${{ runner.temp }}/vakolink-output/*.zip
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 14
-
       - name: Verify Windows application routing in an isolated runner
         shell: pwsh
+        env:
+          QA_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
           $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
           if (!$admin) { throw 'The Windows runner is not elevated.' }
           $qa = Join-Path $env:RUNNER_TEMP 'teredo-qa'
           $core = Join-Path $env:RUNNER_TEMP 'teredo-qa-release'
-          $archive = Get-ChildItem "$env:RUNNER_TEMP/vakolink-output" -Filter '*-windows-x64.zip' | Select-Object -First 1
+          $artifactDirectory = Join-Path $env:RUNNER_TEMP 'release-artifact'
+          $outer = Join-Path $env:RUNNER_TEMP 'release-artifact.zip'
+          $headers = @{ Authorization = "Bearer $env:QA_TOKEN"; Accept = 'application/vnd.github+json' }
+          $list = Invoke-RestMethod -Headers $headers https://api.github.com/repos/Hell4ik/VaKoLink-Client/actions/runs/45237640795/artifacts
+          $artifact = $list.artifacts | Where-Object name -eq 'VaKoLink-windows-x64' | Select-Object -First 1
+          if (!$artifact) { throw 'Official CI artifact missing.' }
+          Invoke-WebRequest -Headers $headers $artifact.archive_download_url -OutFile $outer
+          if ("sha256:$((Get-FileHash -LiteralPath $outer).Hash)" -ne $artifact.digest) { throw 'Official CI artifact checksum differs.' }
+          Expand-Archive -LiteralPath $outer -DestinationPath $artifactDirectory
+          $archive = Get-ChildItem -LiteralPath $artifactDirectory -Filter '*.zip' | Select-Object -First 1
           if (!$archive) { throw 'Portable release ZIP missing.' }
           Expand-Archive -LiteralPath $archive.FullName -DestinationPath $core
           $release = (Get-ChildItem -LiteralPath $core -Directory | Select-Object -First 1).FullName
