@@ -39,7 +39,7 @@ public partial class App : Application
                     mainWindow.Opened += (_, _) =>
                     {
                         Console.WriteLine(mainWindow.Title);
-                        desktop.Shutdown();
+                        Dispatcher.UIThread.Post(() => desktop.Shutdown());
                     };
                 }
             }

@@ -3,7 +3,7 @@ namespace v2rayN.Desktop.Common;
 public static class AppBuilderExtension
 {
     private static readonly string DefaultFontFamilyName =
-        Path.Combine(Global.AvaAssets, "Fonts#Noto Sans SC");
+        AvaUtils.AssetsRoot + "Fonts#Noto Sans SC";
 
     public static AppBuilder WithFontByDefault(this AppBuilder appBuilder)
     {

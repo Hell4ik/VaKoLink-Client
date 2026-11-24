@@ -4,6 +4,8 @@ namespace v2rayN.Desktop.Common;
 
 internal class AvaUtils
 {
+    internal static string AssetsRoot { get; } = $"avares://{typeof(AvaUtils).Assembly.GetName().Name}/Assets/";
+
     public static async Task<string?> GetClipboardData(Window owner)
     {
         try
@@ -48,7 +50,7 @@ internal class AvaUtils
             return new(fileName);
         }
 
-        var uri = new Uri(Path.Combine(Global.AvaAssets, $"NotifyIcon{index}.ico"));
+        var uri = new Uri(AssetsRoot + $"NotifyIcon{index}.ico");
         using var bitmap = new Bitmap(AssetLoader.Open(uri));
         return new(bitmap);
     }

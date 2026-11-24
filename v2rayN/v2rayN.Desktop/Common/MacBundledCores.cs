@@ -12,7 +12,7 @@ internal static class MacBundledCores
         }
 
         string destinationDirectory = Utils.GetBinPath("");
-        foreach (string relativePath in new[] { "xray/xray", "xray/geoip.dat", "xray/geosite.dat", "sing_box/sing-box", "mihomo/mihomo" })
+        foreach (string relativePath in new[] { "xray/xray", "geoip.dat", "geosite.dat", "sing_box/sing-box", "mihomo/mihomo" })
         {
             string source = Path.Combine(sourceDirectory, relativePath);
             string destination = Path.Combine(destinationDirectory, relativePath);

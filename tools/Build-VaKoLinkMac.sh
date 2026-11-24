@@ -49,6 +49,7 @@ bin="$resources/bin"
 mkdir -p "$bin/xray" "$bin/sing_box" "$bin/mihomo" "$stage/sources"
 download "https://github.com/XTLS/Xray-core/releases/download/v26.10.31/$xray" "$work/xray.zip" "$xray_hash"
 unzip -q "$work/xray.zip" xray geoip.dat geosite.dat -d "$bin/xray"
+mv "$bin/xray/geoip.dat" "$bin/xray/geosite.dat" "$bin/"
 download "https://github.com/SagerNet/sing-box/releases/download/v1.14.4/$sing.tar.gz" "$work/sing.tar.gz" "$sing_hash"
 tar -xOf "$work/sing.tar.gz" "$sing/sing-box" > "$bin/sing_box/sing-box"
 download "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/$mihomo" "$work/mihomo.gz" "$mihomo_hash"
@@ -69,6 +70,10 @@ unzip -p "$work/xray.zip" LICENSE > "$stage/sources/Xray-LICENSE.txt"
 tar -xOf "$work/sing.tar.gz" "$sing/LICENSE" > "$stage/sources/sing-box-LICENSE.txt"
 curl --disable --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
   --max-time 40 'https://raw.githubusercontent.com/MetaCubeX/mihomo/v1.19.33/LICENSE' > "$stage/sources/mihomo-LICENSE.txt"
+for notice in LICENSE.TXT THIRD-PARTY-NOTICES.TXT; do
+  curl --disable --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+    --max-time 40 "https://raw.githubusercontent.com/dotnet/runtime/v10.0.0/$notice" > "$stage/sources/dotnet-$notice"
+done
 
 cat > "$app/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
