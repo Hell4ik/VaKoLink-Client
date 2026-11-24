@@ -115,6 +115,9 @@ if kill -0 "$pid" 2>/dev/null; then
   cat "$log"
   exit 1
 fi
-wait "$pid"
+if ! wait "$pid"; then
+  cat "$log"
+  exit 1
+fi
 grep -F "VaKoLink v$version" "$log"
 (cd "$output" && shasum -a 256 "$name" > "$name.sha256")
