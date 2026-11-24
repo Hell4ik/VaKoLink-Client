@@ -45,7 +45,7 @@ download() {
 
 dotnet publish "$project" -c Release -r "osx-$arch" --self-contained true \
   -p:DebugType=None -p:DebugSymbols=false "-p:PathMap=$root=/_/VaKoLink-Client" -o "$macos"
-bin="$macos/bin"
+bin="$resources/bin"
 mkdir -p "$bin/xray" "$bin/sing_box" "$bin/mihomo" "$stage/sources"
 download "https://github.com/XTLS/Xray-core/releases/download/v26.10.31/$xray" "$work/xray.zip" "$xray_hash"
 unzip -q "$work/xray.zip" xray geoip.dat geosite.dat -d "$bin/xray"
@@ -54,7 +54,8 @@ tar -xOf "$work/sing.tar.gz" "$sing/sing-box" > "$bin/sing_box/sing-box"
 download "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.33/$mihomo" "$work/mihomo.gz" "$mihomo_hash"
 gzip -dc "$work/mihomo.gz" > "$bin/mihomo/mihomo"
 chmod +x "$bin/xray/xray" "$bin/sing_box/sing-box" "$bin/mihomo/mihomo"
-cp "$root/v2rayN/v2rayN.Desktop/v2rayN.icns" "$resources/AppIcon.icns"
+mv "$macos/v2rayN.icns" "$resources/AppIcon.icns"
+if [[ -f "$macos/v2rayN.png" ]]; then mv "$macos/v2rayN.png" "$resources/"; fi
 cp "$root/LICENSE" "$stage/LICENSE.txt"
 cp "$root/tools/VaKoLink-macOS.txt" "$stage/Readme.txt"
 git -C "$root" rev-parse HEAD > "$stage/SourceCommit.txt"
@@ -91,7 +92,7 @@ for executable in "$macos/VaKoLink" "$bin/xray/xray" "$bin/sing_box/sing-box" "$
 done
 while IFS= read -r -d '' file; do
   if file -b "$file" | grep -q 'Mach-O'; then codesign --force --sign - "$file"; fi
-done < <(find "$macos" -type f -print0)
+done < <(find "$macos" "$bin" -type f -print0)
 codesign --force --sign - "$app"
 name="VaKoLink-v$version-macos-$arch.zip"
 ditto -c -k --sequesterRsrc "$stage" "$output/$name"
@@ -99,9 +100,9 @@ mkdir "$work/verified"
 ditto -x -k "$output/$name" "$work/verified"
 verified="$work/verified/VaKoLink.app"
 codesign --verify --strict --deep "$verified"
-"$verified/Contents/MacOS/bin/xray/xray" version | grep '26.10.31'
-"$verified/Contents/MacOS/bin/sing_box/sing-box" version | grep '1.14.4'
-"$verified/Contents/MacOS/bin/mihomo/mihomo" -v | grep '1.19.33'
+"$verified/Contents/Resources/bin/xray/xray" version | grep '26.10.31'
+"$verified/Contents/Resources/bin/sing_box/sing-box" version | grep '1.14.4'
+"$verified/Contents/Resources/bin/mihomo/mihomo" -v | grep '1.19.33'
 log="$work/launch.log"
 "$verified/Contents/MacOS/VaKoLink" --vakolink-ci-smoke > "$log" 2>&1 &
 pid=$!

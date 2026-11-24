@@ -5,7 +5,7 @@ internal static class MacBundledCores
     [SupportedOSPlatform("macos")]
     internal static void InstallMissing()
     {
-        string sourceDirectory = Utils.GetBaseDirectory("bin");
+        string sourceDirectory = Utils.GetBaseDirectory("../Resources/bin");
         if (!Directory.Exists(sourceDirectory))
         {
             return;
