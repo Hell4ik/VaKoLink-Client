@@ -6,7 +6,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/vakolink-windows.yml'
+      - '.github/workflows/vakolink-macos.yml'
       - 'tools/Build-VaKoLinkWindows.ps1'
+      - 'tools/Build-VaKoLinkMac.sh'
 
 permissions:
   contents: read

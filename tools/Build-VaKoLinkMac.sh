@@ -81,13 +81,13 @@ cat > "$app/Contents/Info.plist" <<EOF
 <key>CFBundleVersion</key><string>$version</string>
 <key>CFBundleIconFile</key><string>AppIcon.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>LSMinimumSystemVersion</key><string>13.6</string>
+<key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 EOF
 plutil -lint "$app/Contents/Info.plist"
 for executable in "$macos/VaKoLink" "$bin/xray/xray" "$bin/sing_box/sing-box" "$bin/mihomo/mihomo"; do
-  lipo -verify_arch "$hardware" "$executable"
+  lipo "$executable" -verify_arch "$hardware"
 done
 while IFS= read -r -d '' file; do
   if file -b "$file" | grep -q 'Mach-O'; then codesign --force --sign - "$file"; fi

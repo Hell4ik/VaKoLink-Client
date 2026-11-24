@@ -2,6 +2,7 @@ VaKoLink для macOS
 
 Распакуйте ZIP и перенесите VaKoLink.app в «Программы».
 Выберите arm64 для Mac с Apple Silicon и x64 для Intel.
+Нужна macOS 14 или новее.
 Профиль сохраняется в ~/Library/Application Support/VaKoLink.
 
 Это нативная редакция с интерфейсом Avalonia на базе v2rayN 7.25.6.
