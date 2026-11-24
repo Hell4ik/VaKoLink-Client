@@ -1176,6 +1176,10 @@ public class Utils
 
     public static string StartupPath()
     {
+        if (OperatingSystem.IsMacOS() && AppManager.Instance.UseVaKoLinkProfile)
+        {
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support", "VaKoLink");
+        }
         if (Environment.GetEnvironmentVariable(Global.LocalAppData) == "1")
         {
             return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

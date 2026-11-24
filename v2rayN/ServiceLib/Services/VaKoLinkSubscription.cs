@@ -29,7 +29,7 @@ internal static class VaKoLinkSubscription
         var hwid = string.IsNullOrWhiteSpace(manual) ? null : manual;
         var deviceOs = hwid is not null && headers.GetValueOrDefault(DeviceOsHeader) is { Length: > 0 } configuredOs
             ? configuredOs
-            : "Windows";
+            : OperatingSystem.IsMacOS() ? "macOS" : "Windows";
         for (var attempt = 0; ; attempt++)
         {
             var (response, trusted, portal) = await SendAsync(client, uri, headers, hwid, deviceOs, cancellationToken, metadataOnly);

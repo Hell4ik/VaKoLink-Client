@@ -34,6 +34,14 @@ public partial class App : Application
             if (OperatingSystem.IsMacOS())
             {
                 Current?.TryGetFeature<IActivatableLifetime>()?.Activated += OnMacOSActivated;
+                if (desktop.Args is ["--vakolink-ci-smoke"])
+                {
+                    mainWindow.Opened += (_, _) =>
+                    {
+                        Console.WriteLine(mainWindow.Title);
+                        desktop.Shutdown();
+                    };
+                }
             }
         }
 

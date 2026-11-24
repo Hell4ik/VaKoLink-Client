@@ -1,0 +1,39 @@
+name: VaKoLink macOS
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
+        with:
+          dotnet-version: 10.0.114
+      - name: Build and launch VaKoLink.app
+        run: bash tools/Build-VaKoLinkMac.sh "${{ matrix.arch }}" "$RUNNER_TEMP/vakolink-macos"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: VaKoLink-macos-${{ matrix.arch }}
+          path: ${{ runner.temp }}/vakolink-macos/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

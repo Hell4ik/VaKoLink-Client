@@ -114,9 +114,25 @@ public sealed class AppManager
         Task.Run(async () =>
         {
             await MigrateProfileExtra();
+            if (OperatingSystem.IsMacOS() && UseVaKoLinkProfile)
+            {
+                await VaKoLinkRouting.EnsureInstalledAsync();
+                if (!(await RoutingItems() ?? []).Any(item => item.IsActive))
+                    await SelectMacRoutingAsync();
+            }
         }).Wait();
 
         return true;
+    }
+
+    public async Task SelectMacRoutingAsync()
+    {
+        await VaKoLinkRouting.EnsureInstalledAsync();
+        var preset = VaKoLinkRouting.ForMode(_config.TunModeItem.EnableTun);
+        var stored = (await RoutingItems() ?? []).FirstOrDefault(item =>
+            item.Id == preset.Id || VaKoLinkRouting.MatchesImportedPreset(item, preset));
+        if (stored is not null)
+            await ConfigHandler.SetDefaultRouting(_config, stored);
     }
 
     public bool Reset()

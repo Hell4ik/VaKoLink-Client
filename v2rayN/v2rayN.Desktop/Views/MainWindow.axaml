@@ -103,6 +103,7 @@
 
                     <MenuItem x:Name="menuHelp" Header="{x:Static resx:ResUI.menuHelp}">
                         <MenuItem x:Name="menuCheckUpdate" Header="{x:Static resx:ResUI.menuCheckUpdate}" />
+                        <MenuItem x:Name="menuVaKoLinkRelease" Header="Скачать обновление VaKoLink" IsVisible="False" />
                         <Separator />
                     </MenuItem>
 

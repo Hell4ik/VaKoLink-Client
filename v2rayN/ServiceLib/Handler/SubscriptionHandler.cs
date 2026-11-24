@@ -2,7 +2,7 @@ namespace ServiceLib.Handler;
 
 public static class SubscriptionHandler
 {
-    private static bool IsVaKoLinkWindows => OperatingSystem.IsWindows() && AppManager.Instance.UseVaKoLinkProfile;
+    private static bool UseVaKoLinkSubscription => AppManager.Instance.UseVaKoLinkProfile;
 
     public static async Task UpdateProcess(Config config, string subId, bool blProxy, Func<bool, string, Task> updateFunc)
     {
@@ -18,7 +18,7 @@ public static class SubscriptionHandler
         var successCount = 0;
         foreach (var item in subItem)
         {
-            var hashCode = IsVaKoLinkWindows && item.Remarks?.Contains("://") == true ? "" : $"{item.Remarks}->";
+            var hashCode = UseVaKoLinkSubscription && item.Remarks?.Contains("://") == true ? "" : $"{item.Remarks}->";
             try
             {
                 if (!IsValidSubscription(item, subId))
@@ -49,7 +49,7 @@ public static class SubscriptionHandler
             }
             catch (VaKoLinkSubscriptionException ex)
             {
-                if (IsVaKoLinkWindows && VaKoLinkConfigurationMetadata.Supports(item))
+                if (UseVaKoLinkSubscription && VaKoLinkConfigurationMetadata.Supports(item))
                 {
                     VaKoLinkConfigurationMetadata.ReportFailure(item, VaKoLinkConfigurationMetadata.Scope.All, ex);
                 }
@@ -59,7 +59,7 @@ public static class SubscriptionHandler
             }
             catch (Exception ex)
             {
-                if (IsVaKoLinkWindows)
+                if (UseVaKoLinkSubscription)
                 {
                     if (VaKoLinkConfigurationMetadata.Supports(item))
                     {
@@ -118,7 +118,7 @@ public static class SubscriptionHandler
         {
             AcceptHeader = "*/*",
             RequestHeaders = requestHeaders,
-            RedactStringDownloadErrors = IsVaKoLinkWindows
+            RedactStringDownloadErrors = UseVaKoLinkSubscription
         };
         downloadHandle.Error += (sender2, args) =>
         {
@@ -130,13 +130,13 @@ public static class SubscriptionHandler
     private static async Task<string> DownloadSubscriptionContent(DownloadService downloadHandle, string url, bool blProxy,
         string userAgent, bool allowDeviceApproval = true, Action<VaKoLinkConfigurationUsage>? receiveUsage = null)
     {
-        if (IsVaKoLinkWindows && allowDeviceApproval && Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+        if (UseVaKoLinkSubscription && allowDeviceApproval && Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
             VaKoLinkSubscription.IsPortalSubscription(uri))
         {
             return await downloadHandle.DownloadVaKoLinkSubscriptionAsync(uri, blProxy, userAgent, receiveUsage);
         }
 
-        var portalUsage = IsVaKoLinkWindows && allowDeviceApproval ? receiveUsage : null;
+        var portalUsage = UseVaKoLinkSubscription && allowDeviceApproval ? receiveUsage : null;
         var result = await downloadHandle.TryDownloadSubscriptionStringAsync(url, blProxy, userAgent, portalUsage);
 
         // If download with proxy fails, try direct connection
@@ -195,7 +195,7 @@ public static class SubscriptionHandler
         {
             await VaKoLinkConfigurationMetadata.SaveAsync(item, usage, VaKoLinkConfigurationMetadata.Scope.All);
         }
-        else if (result.IsNullOrEmpty() && IsVaKoLinkWindows && VaKoLinkConfigurationMetadata.Supports(item))
+        else if (result.IsNullOrEmpty() && UseVaKoLinkSubscription && VaKoLinkConfigurationMetadata.Supports(item))
         {
             VaKoLinkConfigurationMetadata.ReportFailure(item, VaKoLinkConfigurationMetadata.Scope.All);
         }
@@ -252,7 +252,7 @@ public static class SubscriptionHandler
         await updateFunc?.Invoke(false, $"{hashCode}{ResUI.MsgGetSubscriptionSuccessfully}");
 
         // If result is too short, display content directly
-        if (!IsVaKoLinkWindows && result.Length < 99)
+        if (!UseVaKoLinkSubscription && result.Length < 99)
         {
             await updateFunc?.Invoke(false, $"{hashCode}{result}");
         }
@@ -264,7 +264,7 @@ public static class SubscriptionHandler
         if (ret <= 0)
         {
             Logging.SaveLog("FailedImportSubscription");
-            if (!IsVaKoLinkWindows)
+            if (!UseVaKoLinkSubscription)
             {
                 Logging.SaveLog(result);
             }

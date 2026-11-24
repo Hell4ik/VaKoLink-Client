@@ -38,11 +38,17 @@ internal class Program
         }
         else
         {
-            _ = new Mutex(true, "v2rayN", out var bOnlyOneInstance);
+            _ = new Mutex(true, OperatingSystem.IsMacOS() ? "VaKoLink" : "v2rayN", out var bOnlyOneInstance);
             if (!bOnlyOneInstance)
             {
                 return false;
             }
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            AppManager.Instance.UseVaKoLinkProfile = true;
+            MacBundledCores.InstallMissing();
         }
 
         if (!AppManager.Instance.InitApp())

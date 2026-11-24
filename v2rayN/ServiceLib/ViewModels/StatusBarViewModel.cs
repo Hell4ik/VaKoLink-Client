@@ -472,6 +472,11 @@ public partial class StatusBarViewModel : MyReactiveObject
             }
         }
 
+        if (OperatingSystem.IsMacOS() && AppManager.Instance.UseVaKoLinkProfile)
+        {
+            await AppManager.Instance.SelectMacRoutingAsync();
+            await RefreshRoutingsMenu();
+        }
         await ConfigHandler.SaveConfig(_config);
         ReloadRequested.Publish();
     }

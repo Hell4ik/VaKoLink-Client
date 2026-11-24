@@ -12,6 +12,8 @@ permissions:
   contents: read
 
 jobs:
+  macos:
+    uses: ./.github/workflows/vakolink-macos.yml
   build:
     runs-on: windows-2025
     timeout-minutes: 25

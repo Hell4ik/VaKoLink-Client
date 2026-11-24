@@ -13,6 +13,13 @@
     <ItemGroup Condition="'$(RuntimeIdentifier)' == 'osx-x64' Or '$(RuntimeIdentifier)' == 'osx-arm64'">
         <RuntimeHostConfigurationOption Include="System.Net.Security.UseNetworkFramework" Value="true" />
     </ItemGroup>
+    <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'osx-x64' Or '$(RuntimeIdentifier)' == 'osx-arm64'">
+        <AssemblyName>VaKoLink</AssemblyName>
+        <Product>VaKoLink</Product>
+        <FileVersion>$(VaKoLinkVersion).0.0</FileVersion>
+        <InformationalVersion>$(VaKoLinkVersion)</InformationalVersion>
+        <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    </PropertyGroup>
     
 	<ItemGroup>
 		<PackageReference Include="Avalonia.AvaloniaEdit" />

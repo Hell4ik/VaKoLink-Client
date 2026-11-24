@@ -49,7 +49,7 @@ internal static class VaKoLinkRouting
         }
     }
 
-    private static bool MatchesImportedPreset(RoutingItem item, RoutingItem preset)
+    internal static bool MatchesImportedPreset(RoutingItem item, RoutingItem preset)
     {
         if (!item.Enabled || !string.Equals(item.DomainStrategy, preset.DomainStrategy, StringComparison.OrdinalIgnoreCase) ||
             !string.IsNullOrEmpty(item.DomainStrategy4Singbox) || !string.IsNullOrEmpty(item.CustomRulesetPath4Singbox))

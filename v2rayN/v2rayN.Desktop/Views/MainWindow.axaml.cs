@@ -1,4 +1,5 @@
 using Avalonia.Controls.Notifications;
+using System.Reflection;
 using DialogHostAvalonia;
 using v2rayN.Desktop.Base;
 using v2rayN.Desktop.Common;
@@ -146,7 +147,22 @@ public partial class MainWindow : WindowBase<MainWindowViewModel>
         }
         else
         {
-            Title = $"{Utils.GetVersion()}";
+            if (OperatingSystem.IsMacOS())
+            {
+                var version = typeof(Program).Assembly
+                    .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+                Title = $"VaKoLink v{version} · {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture}";
+                menuVaKoLinkRelease.IsVisible = true;
+                menuVaKoLinkRelease.Click += async (_, _) =>
+                {
+                    await Launcher.LaunchUriAsync(new Uri("https://github.com/Hell4ik/VaKoLink-Client/releases/latest"));
+                };
+                menuPromotion.IsVisible = false;
+            }
+            else
+            {
+                Title = Utils.GetVersion();
+            }
             menuAddServerViaScan.IsVisible = false;
         }
 
