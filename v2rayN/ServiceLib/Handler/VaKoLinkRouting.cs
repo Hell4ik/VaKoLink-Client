@@ -28,9 +28,11 @@ internal static class VaKoLinkRouting
     public static async Task EnsureInstalledAsync()
     {
         var existing = await AppManager.Instance.RoutingItems() ?? [];
+        var proxy = ForMode(false);
+        await UpgradeRockstarRuleAsync(existing, proxy);
         var names = existing.Select(item => item.Remarks).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var sort = existing.Count > 0 ? existing.Max(item => item.Sort) : 0;
-        foreach (var preset in new[] { ForMode(false), ForMode(true) })
+        foreach (var preset in new[] { proxy, ForMode(true) })
         {
             if (existing.Any(item => item.Id == preset.Id || MatchesImportedPreset(item, preset)))
             {
@@ -46,6 +48,24 @@ internal static class VaKoLinkRouting
             }
             preset.Sort = ++sort;
             await SQLiteHelper.Instance.InsertIfMissingAsync(preset);
+        }
+    }
+
+    private static async Task UpgradeRockstarRuleAsync(List<RoutingItem> existing, RoutingItem proxy)
+    {
+        // Before v1.32 the built-in Proxy rules had no leading Rockstar exception.
+        var rules = ReadRules(proxy.RuleSet)!;
+        var previousPreset = new RoutingItem
+        {
+            Remarks = proxy.Remarks,
+            DomainStrategy = proxy.DomainStrategy,
+            RuleSet = JsonUtils.Serialize(rules.Skip(1).ToList(), false)
+        };
+        foreach (var item in existing.Where(item => MatchesImportedPreset(item, previousPreset)))
+        {
+            item.RuleSet = proxy.RuleSet;
+            item.RuleNum = proxy.RuleNum;
+            await SQLiteHelper.Instance.UpdateAsync(item);
         }
     }
 

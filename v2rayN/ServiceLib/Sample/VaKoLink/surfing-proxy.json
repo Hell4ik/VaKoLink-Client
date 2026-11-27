@@ -2,6 +2,16 @@
   {
     "outboundTag": "direct",
     "domain": [
+      "full:signin.rockstargames.com",
+      "full:rgl.rockstargames.com",
+      "full:rgl-prod.ros.rockstargames.com"
+    ],
+    "enabled": true,
+    "remarks": "Rockstar authentication -> DIRECT"
+  },
+  {
+    "outboundTag": "direct",
+    "domain": [
       "geosite:private"
     ],
     "ip": [

@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <Version>7.25.6</Version>
-        <VaKoLinkRevision>31</VaKoLinkRevision>
+        <VaKoLinkRevision>32</VaKoLinkRevision>
         <VaKoLinkVersion>1.$(VaKoLinkRevision)</VaKoLinkVersion>
     </PropertyGroup>
 
